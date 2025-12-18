@@ -29,6 +29,7 @@
   let charLimit = $state(2400)
   let errorMessage = $state("")
   let copiedIndex = $state(-1)
+  let copyTimerId: number | null = null
 
   // localStorage에 저장 (상태 변경시 자동 실행)
   $effect.pre(() => {
@@ -131,14 +132,28 @@
   }
 
   function copyToClipboard(content: string, index: number) {
+    // 이전 타이머가 있으면 취소
+    if (copyTimerId !== null) {
+      clearTimeout(copyTimerId)
+    }
+
     copiedIndex = index
     navigator.clipboard.writeText(content)
-    setTimeout(() => {
+
+    // 새 타이머 설정
+    copyTimerId = setTimeout(() => {
       copiedIndex = -1
-    }, 1500)
+      copyTimerId = null
+    }, 2500) as unknown as number
   }
 
   function reset() {
+    // 타이머 정리
+    if (copyTimerId !== null) {
+      clearTimeout(copyTimerId)
+      copyTimerId = null
+    }
+
     result = null
     fileName = ""
     errorMessage = ""
@@ -361,14 +376,21 @@
               >
                 {#each result.voices as voice, idx}
                   <article
-                    class="rounded-xl p-3 bg-slate-950/50 border border-slate-700/80 flex flex-col gap-2.5 h-fit relative {copiedIndex ===
+                    class="rounded-xl p-3 border flex flex-col gap-2.5 h-fit relative transition-all duration-300 {copiedIndex ===
                     idx
-                      ? 'ring-2 ring-green-400/50 shadow-[0_0_20px_rgba(34,197,94,0.3)]'
-                      : ''}"
+                      ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/10 border-green-400/60 shadow-[0_0_30px_rgba(34,197,94,0.4)]'
+                      : 'bg-slate-950/50 border-slate-700/80'}"
                   >
                     <div class="flex justify-between items-start gap-2">
                       <div>
-                        <h3 class="text-xs font-medium">{voice.name}</h3>
+                        <h3
+                          class="text-xs font-medium transition-colors {copiedIndex ===
+                          idx
+                            ? 'text-green-300'
+                            : ''}"
+                        >
+                          {voice.name}
+                        </h3>
                         <p class="text-[11px] text-slate-500 mt-0.5">
                           {voice.note_count}개 음표 · {voice.char_count}자
                         </p>
@@ -376,15 +398,15 @@
                     </div>
 
                     <button
-                      class="btn btn-primary btn-sm rounded-full text-xs font-medium w-full bg-gradient-to-r from-sky-400 to-indigo-500 border-0 text-slate-950 shadow-lg shadow-indigo-500/40 hover:opacity-95 active:translate-y-0.5 {copiedIndex ===
+                      class="btn btn-primary btn-sm rounded-full text-xs font-medium w-full border-0 shadow-lg transition-all duration-300 {copiedIndex ===
                       idx
-                        ? 'bg-gradient-to-r from-green-400 to-emerald-500'
-                        : ''}"
+                        ? 'bg-gradient-to-r from-green-400 to-emerald-500 shadow-green-500/50 text-slate-950 pointer-events-none'
+                        : 'bg-gradient-to-r from-sky-400 to-indigo-500 shadow-indigo-500/40 text-slate-950 hover:shadow-indigo-500/60 hover:scale-105 active:scale-95'}"
                       type="button"
                       onclick={() => copyToClipboard(voice.content, idx)}
                     >
                       {#if copiedIndex === idx}
-                        ✓ 복사 완료!
+                        복사 완료!
                       {:else}
                         📋 MML 복사하기
                       {/if}
