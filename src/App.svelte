@@ -44,8 +44,15 @@
     const savedMode = localStorage.getItem("conversionMode")
     const savedLimit = localStorage.getItem("charLimit")
 
-    if (savedMode) conversionMode = savedMode
-    if (savedLimit) charLimit = parseInt(savedLimit, 10)
+    if (savedMode) {
+      conversionMode = savedMode
+    }
+    if (savedLimit) {
+      const parsedLimit = parseInt(savedLimit, 10)
+      if (!isNaN(parsedLimit) && parsedLimit >= 500 && parsedLimit <= 5000) {
+        charLimit = parsedLimit
+      }
+    }
 
     // Drag & Drop 이벤트
     const appWindow = getCurrentWindow()
