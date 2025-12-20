@@ -2,6 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
+use tauri::Manager;
 
 mod converter;
 mod utils;
@@ -32,6 +35,66 @@ struct ConversionResult {
     bpm: u32,
     total_notes: usize,
     original_duration: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AppSettings {
+    conversion_mode: String,
+    char_limit: usize,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            conversion_mode: "normal".to_string(),
+            char_limit: 2400,
+        }
+    }
+}
+
+fn get_settings_path(app: tauri::AppHandle) -> Result<PathBuf, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    fs::create_dir_all(&app_data_dir)
+        .map_err(|e| format!("Failed to create app data dir: {}", e))?;
+
+    Ok(app_data_dir.join("settings.json"))
+}
+
+#[tauri::command]
+fn save_settings(app: tauri::AppHandle, mode: String, char_limit: usize) -> Result<(), String> {
+    let settings = AppSettings {
+        conversion_mode: mode,
+        char_limit,
+    };
+
+    let settings_path = get_settings_path(app)?;
+    let json = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+
+    fs::write(settings_path, json).map_err(|e| format!("Failed to write settings: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn load_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
+    let settings_path = get_settings_path(app)?;
+
+    if !settings_path.exists() {
+        return Ok(AppSettings::default());
+    }
+
+    let json =
+        fs::read_to_string(settings_path).map_err(|e| format!("Failed to read settings: {}", e))?;
+
+    let settings: AppSettings =
+        serde_json::from_str(&json).map_err(|e| format!("Failed to parse settings: {}", e))?;
+
+    Ok(settings)
 }
 
 #[tauri::command]
@@ -322,7 +385,11 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![convert_midi])
+        .invoke_handler(tauri::generate_handler![
+            convert_midi,
+            save_settings,
+            load_settings
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

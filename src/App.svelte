@@ -25,44 +25,25 @@
   let isConverting = $state(false)
   let result = $state<ConversionResult | null>(null)
   let fileName = $state("")
-
-  // localStorage에서 초기값 로드
-  function getInitialMode(): string {
-    if (typeof window === "undefined") return "normal"
-    const saved = localStorage.getItem("conversionMode")
-    return saved || "normal"
-  }
-
-  function getInitialCharLimit(): number {
-    if (typeof window === "undefined") return 2400
-    const saved = localStorage.getItem("charLimit")
-    if (saved) {
-      const parsed = parseInt(saved, 10)
-      if (!isNaN(parsed) && parsed >= 500 && parsed <= 5000) {
-        return parsed
-      }
-    }
-    return 2400
-  }
-
-  let conversionMode = $state(getInitialMode())
-  let charLimit = $state(getInitialCharLimit())
+  let conversionMode = $state("normal")
+  let charLimit = $state(2400)
   let errorMessage = $state("")
   let copiedIndex = $state(-1)
   let copyTimerId: number | null = null
-  let isInitialized = false
 
-  // localStorage에 저장 (초기화 후에만)
-  $effect(() => {
-    if (typeof window !== "undefined" && isInitialized) {
-      localStorage.setItem("conversionMode", conversionMode)
-      localStorage.setItem("charLimit", charLimit.toString())
+  onMount(async () => {
+    // Rust 백엔드에서 설정 불러오기
+    try {
+      const settings = await invoke<{
+        conversion_mode: string
+        char_limit: number
+      }>("load_settings")
+
+      conversionMode = settings.conversion_mode
+      charLimit = settings.char_limit
+    } catch (error) {
+      console.error("Failed to load settings:", error)
     }
-  })
-
-  onMount(() => {
-    // 초기화 완료 표시
-    isInitialized = true
 
     // Drag & Drop 이벤트
     const appWindow = getCurrentWindow()
@@ -122,6 +103,16 @@
     isConverting = true
     errorMessage = ""
     result = null
+
+    // 변환 시작할 때 현재 설정 저장
+    try {
+      await invoke("save_settings", {
+        mode: conversionMode,
+        charLimit: charLimit,
+      })
+    } catch (error) {
+      console.error("Failed to save settings:", error)
+    }
 
     try {
       const fs = await import("@tauri-apps/plugin-fs")
