@@ -25,34 +25,44 @@
   let isConverting = $state(false)
   let result = $state<ConversionResult | null>(null)
   let fileName = $state("")
-  let conversionMode = $state("normal")
-  let charLimit = $state(2400)
+
+  // localStorage에서 초기값 로드
+  function getInitialMode(): string {
+    if (typeof window === "undefined") return "normal"
+    const saved = localStorage.getItem("conversionMode")
+    return saved || "normal"
+  }
+
+  function getInitialCharLimit(): number {
+    if (typeof window === "undefined") return 2400
+    const saved = localStorage.getItem("charLimit")
+    if (saved) {
+      const parsed = parseInt(saved, 10)
+      if (!isNaN(parsed) && parsed >= 500 && parsed <= 5000) {
+        return parsed
+      }
+    }
+    return 2400
+  }
+
+  let conversionMode = $state(getInitialMode())
+  let charLimit = $state(getInitialCharLimit())
   let errorMessage = $state("")
   let copiedIndex = $state(-1)
   let copyTimerId: number | null = null
+  let isInitialized = false
 
-  // localStorage에 저장 (상태 변경시 자동 실행)
-  $effect.pre(() => {
-    if (typeof window !== "undefined") {
+  // localStorage에 저장 (초기화 후에만)
+  $effect(() => {
+    if (typeof window !== "undefined" && isInitialized) {
       localStorage.setItem("conversionMode", conversionMode)
       localStorage.setItem("charLimit", charLimit.toString())
     }
   })
 
   onMount(() => {
-    // localStorage 불러오기
-    const savedMode = localStorage.getItem("conversionMode")
-    const savedLimit = localStorage.getItem("charLimit")
-
-    if (savedMode) {
-      conversionMode = savedMode
-    }
-    if (savedLimit) {
-      const parsedLimit = parseInt(savedLimit, 10)
-      if (!isNaN(parsedLimit) && parsedLimit >= 500 && parsedLimit <= 5000) {
-        charLimit = parsedLimit
-      }
-    }
+    // 초기화 완료 표시
+    isInitialized = true
 
     // Drag & Drop 이벤트
     const appWindow = getCurrentWindow()
