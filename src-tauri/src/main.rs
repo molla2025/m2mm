@@ -11,6 +11,15 @@ mod utils;
 
 use converter::{allocate_voices_smart, extract_midi_notes, generate_mml_final, Note, TPB};
 
+// 틱을 실제 시간(초)으로 변환
+fn ticks_to_seconds(ticks: u32, bpm: u32) -> f64 {
+    // ticks / TPB = quarter notes (박자 수)
+    // quarter notes / BPM * 60 = 초
+    let quarter_notes = ticks as f64 / TPB as f64;
+    let seconds = quarter_notes / bpm as f64 * 60.0;
+    seconds
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct ConversionOptions {
     mode: String, // "normal" or "instrument"
@@ -124,7 +133,7 @@ fn convert_midi_internal(
         0.0
     } else {
         let max_end = notes.iter().map(|n| n.end).max().unwrap_or(0);
-        max_end as f64 / TPB as f64 / 2.0
+        ticks_to_seconds(max_end, bpm)
     };
 
     let voices = if options.mode == "instrument" {
@@ -172,44 +181,69 @@ fn convert_by_pitch(
         return Ok(Vec::new());
     }
 
-    // 이진 탐색으로 모든 voice가 char_limit 이하인 최대 end_time 찾기
-    let grid_size = 24u32;
-    let mut left = 0u32;
-    let mut right = max_end_time;
-    let mut best_end_time = max_end_time;
+    // 먼저 전체 길이가 char_limit을 만족하는지 체크
+    let mut full_length_valid = true;
+    for voice in voices.iter() {
+        let first_note = voice[0].note;
+        let mut start_octave = (first_note as i32 / 12) - 1;
+        start_octave = start_octave.max(2).min(6);
 
-    while left <= right {
-        let mid = ((left + right) / 2 / grid_size) * grid_size;
+        let mml = generate_mml_final(&voice, bpm, start_octave, compress_mode);
 
-        let mut all_valid = true;
-
-        // 각 voice를 mid 시간까지 크롭해서 char_limit 체크
-        for voice in voices.iter() {
-            let cropped: Vec<Note> = voice.iter().filter(|n| n.start < mid).cloned().collect();
-
-            if cropped.is_empty() {
-                continue;
-            }
-
-            let first_note = cropped[0].note;
-            let mut start_octave = (first_note as i32 / 12) - 1;
-            start_octave = start_octave.max(2).min(6);
-
-            let mml = generate_mml_final(&cropped, bpm, start_octave, compress_mode);
-
-            if mml.len() > char_limit {
-                all_valid = false;
-                break;
-            }
-        }
-
-        if all_valid {
-            best_end_time = mid;
-            left = mid + grid_size;
-        } else {
-            right = mid - grid_size;
+        if mml.len() > char_limit {
+            full_length_valid = false;
+            break;
         }
     }
+
+    // 전체 길이가 OK면 그대로 사용
+    let best_end_time = if full_length_valid {
+        max_end_time
+    } else {
+        // 이진 탐색으로 모든 voice가 char_limit 이하인 최대 end_time 찾기
+        let grid_size = 24u32;
+        let mut left = 0u32;
+        let mut right = max_end_time;
+        let mut best = 0u32;
+
+        while left <= right {
+            let mid = ((left + right) / 2 / grid_size) * grid_size;
+            if mid == 0 {
+                break;
+            }
+
+            let mut all_valid = true;
+
+            // 각 voice를 mid 시간까지 크롭해서 char_limit 체크
+            for voice in voices.iter() {
+                let cropped: Vec<Note> = voice.iter().filter(|n| n.start < mid).cloned().collect();
+
+                if cropped.is_empty() {
+                    continue;
+                }
+
+                let first_note = cropped[0].note;
+                let mut start_octave = (first_note as i32 / 12) - 1;
+                start_octave = start_octave.max(2).min(6);
+
+                let mml = generate_mml_final(&cropped, bpm, start_octave, compress_mode);
+
+                if mml.len() > char_limit {
+                    all_valid = false;
+                    break;
+                }
+            }
+
+            if all_valid {
+                best = mid;
+                left = mid + grid_size;
+            } else {
+                right = mid.saturating_sub(grid_size);
+            }
+        }
+
+        best
+    };
 
     // best_end_time으로 모든 voice 최종 크롭
     let mut results = Vec::new();
@@ -230,7 +264,7 @@ fn convert_by_pitch(
 
         let mml_code = generate_mml_final(&final_voice, bpm, start_octave, compress_mode);
         let note_count = final_voice.len();
-        let end_time = best_end_time as f64 / TPB as f64 / 2.0;
+        let end_time = ticks_to_seconds(best_end_time, bpm);
 
         let name = if idx == 0 {
             "멜로디".to_string()
@@ -299,44 +333,69 @@ fn convert_by_instrument(
         return Ok(Vec::new());
     }
 
-    // 이진 탐색으로 모든 voice가 char_limit 이하인 최대 end_time 찾기
-    let grid_size = 24u32;
-    let mut left = 0u32;
-    let mut right = max_end_time;
-    let mut best_end_time = max_end_time;
+    // 먼저 전체 길이가 char_limit을 만족하는지 체크
+    let mut full_length_valid = true;
+    for voice in all_voices.iter() {
+        let first_note = voice[0].note;
+        let mut start_octave = (first_note as i32 / 12) - 1;
+        start_octave = start_octave.max(2).min(6);
 
-    while left <= right {
-        let mid = ((left + right) / 2 / grid_size) * grid_size;
+        let mml = generate_mml_final(&voice, bpm, start_octave, compress_mode);
 
-        let mut all_valid = true;
-
-        // 각 voice를 mid 시간까지 크롭해서 char_limit 체크
-        for voice in all_voices.iter() {
-            let cropped: Vec<Note> = voice.iter().filter(|n| n.start < mid).cloned().collect();
-
-            if cropped.is_empty() {
-                continue;
-            }
-
-            let first_note = cropped[0].note;
-            let mut start_octave = (first_note as i32 / 12) - 1;
-            start_octave = start_octave.max(2).min(6);
-
-            let mml = generate_mml_final(&cropped, bpm, start_octave, compress_mode);
-
-            if mml.len() > char_limit {
-                all_valid = false;
-                break;
-            }
-        }
-
-        if all_valid {
-            best_end_time = mid;
-            left = mid + grid_size;
-        } else {
-            right = mid - grid_size;
+        if mml.len() > char_limit {
+            full_length_valid = false;
+            break;
         }
     }
+
+    // 전체 길이가 OK면 그대로 사용
+    let best_end_time = if full_length_valid {
+        max_end_time
+    } else {
+        // 이진 탐색으로 모든 voice가 char_limit 이하인 최대 end_time 찾기
+        let grid_size = 24u32;
+        let mut left = 0u32;
+        let mut right = max_end_time;
+        let mut best = 0u32;
+
+        while left <= right {
+            let mid = ((left + right) / 2 / grid_size) * grid_size;
+            if mid == 0 {
+                break;
+            }
+
+            let mut all_valid = true;
+
+            // 각 voice를 mid 시간까지 크롭해서 char_limit 체크
+            for voice in all_voices.iter() {
+                let cropped: Vec<Note> = voice.iter().filter(|n| n.start < mid).cloned().collect();
+
+                if cropped.is_empty() {
+                    continue;
+                }
+
+                let first_note = cropped[0].note;
+                let mut start_octave = (first_note as i32 / 12) - 1;
+                start_octave = start_octave.max(2).min(6);
+
+                let mml = generate_mml_final(&cropped, bpm, start_octave, compress_mode);
+
+                if mml.len() > char_limit {
+                    all_valid = false;
+                    break;
+                }
+            }
+
+            if all_valid {
+                best = mid;
+                left = mid + grid_size;
+            } else {
+                right = mid.saturating_sub(grid_size);
+            }
+        }
+
+        best
+    };
 
     // best_end_time으로 모든 voice 최종 크롭
     let mut results = Vec::new();
@@ -361,7 +420,7 @@ fn convert_by_instrument(
 
         let mml_code = generate_mml_final(&final_voice, bpm, start_octave, compress_mode);
         let note_count = final_voice.len();
-        let end_time = best_end_time as f64 / TPB as f64 / 2.0;
+        let end_time = ticks_to_seconds(best_end_time, bpm);
 
         let name = if idx == 0 {
             format!("멜로디 ({})", instrument_name)
