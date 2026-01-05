@@ -8,6 +8,7 @@ use tauri::Manager;
 
 mod converter;
 mod utils;
+mod analyzer;
 
 use converter::{allocate_voices_smart, extract_midi_notes, generate_mml_final, Note, TPB};
 
@@ -104,6 +105,12 @@ fn load_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
         serde_json::from_str(&json).map_err(|e| format!("Failed to parse settings: {}", e))?;
 
     Ok(settings)
+}
+
+#[tauri::command]
+fn analyze_test_midi(midi_data: Vec<u8>) -> Result<String, String> {
+    let analysis = analyzer::analyze_midi(&midi_data)?;
+    Ok(analyzer::print_analysis(&analysis))
 }
 
 #[tauri::command]
@@ -447,7 +454,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             convert_midi,
             save_settings,
-            load_settings
+            load_settings,
+            analyze_test_midi
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
