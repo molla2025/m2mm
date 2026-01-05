@@ -17,6 +17,12 @@ pub struct Note {
     pub instrument: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct TempoChange {
+    pub tick: u32,
+    pub bpm: u32,
+}
+
 // 점음표 포함 정확한 길이 매핑
 fn get_exact_lengths(compress_mode: bool) -> HashMap<u32, &'static str> {
     let mut map = HashMap::new();
@@ -149,7 +155,7 @@ fn find_best_length(ticks: u32, octave: i32, exact_lengths: &HashMap<u32, &str>,
     }
 }
 
-pub fn extract_midi_notes(midi_data: &[u8], _min_duration: u32) -> Result<(Vec<Note>, u32), String> {
+pub fn extract_midi_notes(midi_data: &[u8], _min_duration: u32) -> Result<(Vec<Note>, u32, Vec<TempoChange>), String> {
     let smf = midly::Smf::parse(midi_data).map_err(|e| format!("MIDI 파싱 오류: {}", e))?;
 
     let tpb = match smf.header.timing {
@@ -157,22 +163,41 @@ pub fn extract_midi_notes(midi_data: &[u8], _min_duration: u32) -> Result<(Vec<N
         _ => return Err("SMPTE 타이밍 지원하지 않음".to_string()),
     };
 
-    // BPM 찾기 - 첫 번째 템포 이벤트 사용
-    let mut bpm = 120;
+    // 모든 템포 변경 이벤트 추출
+    let mut tempo_changes = Vec::new();
     for track in &smf.tracks {
+        let mut tick = 0u32;
         for event in track {
+            tick += event.delta.as_int();
             if let midly::TrackEventKind::Meta(midly::MetaMessage::Tempo(tempo)) = event.kind {
-                bpm = (60_000_000.0 / tempo.as_int() as f64).round() as u32;
-                break;
+                let bpm = (60_000_000.0 / tempo.as_int() as f64).round() as u32;
+                tempo_changes.push((tick, bpm));
             }
-        }
-        if bpm != 120 {
-            break;
         }
     }
 
+    // 템포 변경을 tick 순으로 정렬하고 중복 제거
+    tempo_changes.sort_by_key(|&(tick, _)| tick);
+    tempo_changes.dedup_by_key(|&mut (tick, _)| tick);
+
+    // BPM - 첫 번째 템포 또는 기본값
+    let bpm = tempo_changes.first().map(|&(_, bpm)| bpm).unwrap_or(120);
+
     // TPB 변환 비율 계산
     let tpb_ratio = TPB as f64 / tpb as f64;
+
+    // 템포 변경을 변환된 tick으로 스냅
+    let tempo_changes_converted: Vec<TempoChange> = tempo_changes
+        .into_iter()
+        .map(|(tick, bpm)| {
+            let tick_converted = (tick as f64 * tpb_ratio).round() as u32;
+            let tick_snapped = snap_to_grid(tick_converted);
+            TempoChange {
+                tick: tick_snapped,
+                bpm,
+            }
+        })
+        .collect();
 
     // 음표 추출
     let mut notes = Vec::new();
@@ -303,7 +328,7 @@ pub fn extract_midi_notes(midi_data: &[u8], _min_duration: u32) -> Result<(Vec<N
         i = j;
     }
 
-    Ok((deduplicated, bpm))
+    Ok((deduplicated, bpm, tempo_changes_converted))
 }
 
 pub fn allocate_voices_smart(notes: Vec<Note>) -> Vec<Vec<Note>> {
@@ -477,7 +502,7 @@ pub fn allocate_voices_smart(notes: Vec<Note>) -> Vec<Vec<Note>> {
     voices
 }
 
-pub fn generate_mml_final(voice_notes: &[Note], bpm: u32, start_octave: i32, compress_mode: bool) -> String {
+pub fn generate_mml_final(voice_notes: &[Note], bpm: u32, start_octave: i32, compress_mode: bool, tempo_changes: &[TempoChange]) -> String {
     if voice_notes.is_empty() {
         return String::new();
     }
@@ -491,6 +516,7 @@ pub fn generate_mml_final(voice_notes: &[Note], bpm: u32, start_octave: i32, com
     mml.push(format!("O{}", start_octave));
 
     let mut current_octave = start_octave;
+    let mut tempo_change_index = 1; // 0은 시작 템포이므로 1부터 시작
 
     // 기본 길이 계산
     let mut length_counts: HashMap<String, usize> = HashMap::new();
@@ -519,6 +545,31 @@ pub fn generate_mml_final(voice_notes: &[Note], bpm: u32, start_octave: i32, com
     let mut current_tick = 0u32;
 
     for note in voice_notes {
+        // 템포 변경 확인 (현재 tick과 note.start 사이)
+        while tempo_change_index < tempo_changes.len() {
+            let tempo_change = &tempo_changes[tempo_change_index];
+            if tempo_change.tick <= note.start && tempo_change.tick >= current_tick {
+                // 템포 변경 전까지 쉼표 삽입
+                let gap_before_tempo = tempo_change.tick.saturating_sub(current_tick);
+                if gap_before_tempo > 0 {
+                    let rest_lengths = find_best_length(gap_before_tempo, 4, &exact_lengths, compress_mode);
+                    for (rest_length, rest_ticks) in rest_lengths {
+                        if rest_length == default_length {
+                            mml.push("R".to_string());
+                        } else {
+                            mml.push(format!("R{}", rest_length));
+                        }
+                        current_tick += rest_ticks;
+                    }
+                }
+                // 템포 변경 명령 삽입
+                mml.push(format!("T{}", tempo_change.bpm));
+                tempo_change_index += 1;
+            } else {
+                break;
+            }
+        }
+
         // 갭 계산
         let gap = note.start.saturating_sub(current_tick);
 

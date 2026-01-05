@@ -10,7 +10,7 @@ mod converter;
 mod utils;
 mod analyzer;
 
-use converter::{allocate_voices_smart, extract_midi_notes, generate_mml_final, Note, TPB};
+use converter::{allocate_voices_smart, extract_midi_notes, generate_mml_final, Note, TempoChange, TPB};
 
 // 틱을 실제 시간(초)으로 변환
 fn ticks_to_seconds(ticks: u32, bpm: u32) -> f64 {
@@ -132,7 +132,7 @@ fn convert_midi_internal(
     midi_data: &[u8],
     options: &ConversionOptions,
 ) -> Result<ConversionResult, String> {
-    let (notes, bpm) = extract_midi_notes(midi_data, 24)?;
+    let (notes, bpm, tempo_changes) = extract_midi_notes(midi_data, 24)?;
     let total_notes = notes.len();
 
     // 원본 길이 계산
@@ -145,10 +145,10 @@ fn convert_midi_internal(
 
     let voices = if options.mode == "instrument" {
         // 악기별 모드
-        convert_by_instrument(notes, bpm, options.char_limit, options.compress_mode)?
+        convert_by_instrument(notes, bpm, options.char_limit, options.compress_mode, &tempo_changes)?
     } else {
         // 일반 모드 (피치별)
-        convert_by_pitch(notes, bpm, options.char_limit, options.compress_mode)?
+        convert_by_pitch(notes, bpm, options.char_limit, options.compress_mode, &tempo_changes)?
     };
 
     Ok(ConversionResult {
@@ -166,6 +166,7 @@ fn convert_by_pitch(
     bpm: u32,
     char_limit: usize,
     compress_mode: bool,
+    tempo_changes: &[TempoChange],
 ) -> Result<Vec<VoiceResult>, String> {
     let voices = allocate_voices_smart(notes);
 
@@ -195,7 +196,7 @@ fn convert_by_pitch(
         let mut start_octave = (first_note as i32 / 12) - 1;
         start_octave = start_octave.max(2).min(6);
 
-        let mml = generate_mml_final(&voice, bpm, start_octave, compress_mode);
+        let mml = generate_mml_final(&voice, bpm, start_octave, compress_mode, tempo_changes);
 
         if mml.len() > char_limit {
             full_length_valid = false;
@@ -233,7 +234,7 @@ fn convert_by_pitch(
                 let mut start_octave = (first_note as i32 / 12) - 1;
                 start_octave = start_octave.max(2).min(6);
 
-                let mml = generate_mml_final(&cropped, bpm, start_octave, compress_mode);
+                let mml = generate_mml_final(&cropped, bpm, start_octave, compress_mode, tempo_changes);
 
                 if mml.len() > char_limit {
                     all_valid = false;
@@ -269,7 +270,7 @@ fn convert_by_pitch(
         let mut start_octave = (first_note as i32 / 12) - 1;
         start_octave = start_octave.max(2).min(6);
 
-        let mml_code = generate_mml_final(&final_voice, bpm, start_octave, compress_mode);
+        let mml_code = generate_mml_final(&final_voice, bpm, start_octave, compress_mode, tempo_changes);
         let note_count = final_voice.len();
         let end_time = ticks_to_seconds(best_end_time, bpm);
 
@@ -296,6 +297,7 @@ fn convert_by_instrument(
     bpm: u32,
     char_limit: usize,
     compress_mode: bool,
+    tempo_changes: &[TempoChange],
 ) -> Result<Vec<VoiceResult>, String> {
     let mut instrument_groups: HashMap<String, Vec<Note>> = HashMap::new();
     for note in notes {
@@ -347,7 +349,7 @@ fn convert_by_instrument(
         let mut start_octave = (first_note as i32 / 12) - 1;
         start_octave = start_octave.max(2).min(6);
 
-        let mml = generate_mml_final(&voice, bpm, start_octave, compress_mode);
+        let mml = generate_mml_final(&voice, bpm, start_octave, compress_mode, tempo_changes);
 
         if mml.len() > char_limit {
             full_length_valid = false;
@@ -385,7 +387,7 @@ fn convert_by_instrument(
                 let mut start_octave = (first_note as i32 / 12) - 1;
                 start_octave = start_octave.max(2).min(6);
 
-                let mml = generate_mml_final(&cropped, bpm, start_octave, compress_mode);
+                let mml = generate_mml_final(&cropped, bpm, start_octave, compress_mode, tempo_changes);
 
                 if mml.len() > char_limit {
                     all_valid = false;
@@ -425,7 +427,7 @@ fn convert_by_instrument(
         let mut start_octave = (first_note as i32 / 12) - 1;
         start_octave = start_octave.max(2).min(6);
 
-        let mml_code = generate_mml_final(&final_voice, bpm, start_octave, compress_mode);
+        let mml_code = generate_mml_final(&final_voice, bpm, start_octave, compress_mode, tempo_changes);
         let note_count = final_voice.len();
         let end_time = ticks_to_seconds(best_end_time, bpm);
 
