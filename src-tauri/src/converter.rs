@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::utils::instrument::get_instrument_name;
 use crate::utils::mml::midi_to_note_name;
 
-// 상수
+// 상수 - 표준 TPB (4분음표당 틱 수)
 pub const TPB: u32 = 384;
 pub const GRID_SIZE: u32 = 24;
 
@@ -157,7 +157,7 @@ pub fn extract_midi_notes(midi_data: &[u8], _min_duration: u32) -> Result<(Vec<N
         _ => return Err("SMPTE 타이밍 지원하지 않음".to_string()),
     };
 
-    // BPM 찾기
+    // BPM 찾기 - 첫 번째 템포 이벤트 사용
     let mut bpm = 120;
     for track in &smf.tracks {
         for event in track {
@@ -166,7 +166,13 @@ pub fn extract_midi_notes(midi_data: &[u8], _min_duration: u32) -> Result<(Vec<N
                 break;
             }
         }
+        if bpm != 120 {
+            break;
+        }
     }
+
+    // TPB 변환 비율 계산
+    let tpb_ratio = TPB as f64 / tpb as f64;
 
     // 음표 추출
     let mut notes = Vec::new();
@@ -198,24 +204,19 @@ pub fn extract_midi_notes(midi_data: &[u8], _min_duration: u32) -> Result<(Vec<N
                                 if let Some((start, velocity, channel)) = active.remove(&key) {
                                     let duration = tick.saturating_sub(start);
 
-                                    let start_adjusted = if tpb != TPB {
-                                        ((start as f64 * TPB as f64) / tpb as f64).round() as u32
-                                    } else {
-                                        start
-                                    };
+                                    // TPB 변환 - 먼저 변환 후 스냅
+                                    let start_converted = (start as f64 * tpb_ratio).round() as u32;
+                                    let duration_converted = (duration as f64 * tpb_ratio).round() as u32;
 
-                                    let duration_adjusted = if tpb != TPB {
-                                        ((duration as f64 * TPB as f64) / tpb as f64).round() as u32
-                                    } else {
-                                        duration
-                                    };
-
-                                    let start_snapped = snap_to_grid(start_adjusted);
-                                    let end_snapped = snap_to_grid(start_adjusted + duration_adjusted);
+                                    let start_snapped = snap_to_grid(start_converted);
+                                    let end_converted = start_converted + duration_converted;
+                                    let end_snapped = snap_to_grid(end_converted);
+                                    
                                     let mut duration_snapped = end_snapped.saturating_sub(start_snapped);
 
-                                    if duration_snapped < 24 {
-                                        duration_snapped = 24;
+                                    // 최소 길이 보장
+                                    if duration_snapped < GRID_SIZE {
+                                        duration_snapped = GRID_SIZE;
                                     }
 
                                     let program = channel_programs.get(&channel).copied().unwrap_or(0);
@@ -239,24 +240,19 @@ pub fn extract_midi_notes(midi_data: &[u8], _min_duration: u32) -> Result<(Vec<N
                                 if let Some((start, velocity, channel)) = active.remove(&key) {
                                     let duration = tick.saturating_sub(start);
 
-                                    let start_adjusted = if tpb != TPB {
-                                        ((start as f64 * TPB as f64) / tpb as f64).round() as u32
-                                    } else {
-                                        start
-                                    };
+                                    // TPB 변환 - 먼저 변환 후 스냅
+                                    let start_converted = (start as f64 * tpb_ratio).round() as u32;
+                                    let duration_converted = (duration as f64 * tpb_ratio).round() as u32;
 
-                                    let duration_adjusted = if tpb != TPB {
-                                        ((duration as f64 * TPB as f64) / tpb as f64).round() as u32
-                                    } else {
-                                        duration
-                                    };
-
-                                    let start_snapped = snap_to_grid(start_adjusted);
-                                    let end_snapped = snap_to_grid(start_adjusted + duration_adjusted);
+                                    let start_snapped = snap_to_grid(start_converted);
+                                    let end_converted = start_converted + duration_converted;
+                                    let end_snapped = snap_to_grid(end_converted);
+                                    
                                     let mut duration_snapped = end_snapped.saturating_sub(start_snapped);
 
-                                    if duration_snapped < 24 {
-                                        duration_snapped = 24;
+                                    // 최소 길이 보장
+                                    if duration_snapped < GRID_SIZE {
+                                        duration_snapped = GRID_SIZE;
                                     }
 
                                     let program = channel_programs.get(&channel).copied().unwrap_or(0);
@@ -311,9 +307,9 @@ pub fn extract_midi_notes(midi_data: &[u8], _min_duration: u32) -> Result<(Vec<N
 }
 
 pub fn allocate_voices_smart(notes: Vec<Note>) -> Vec<Vec<Note>> {
-    let num_voices = 6;
-    let mut voices: Vec<Vec<Note>> = vec![Vec::new(); num_voices];
+    let mut voices: Vec<Vec<Note>> = Vec::new();
 
+    // 시작 시간별로 노트 그룹화
     let mut start_times: HashMap<u32, Vec<Note>> = HashMap::new();
     for note in notes {
         start_times.entry(note.start).or_insert_with(Vec::new).push(note);
@@ -328,81 +324,151 @@ pub fn allocate_voices_smart(notes: Vec<Note>) -> Vec<Vec<Note>> {
         let mut simultaneous = start_times.remove(&start_tick).unwrap();
 
         if simultaneous.len() == 1 {
+            // 단일 노트 - 고음은 Voice 0 우선, 그 외는 사용 가능한 첫 번째 voice에 할당
             let note = simultaneous.into_iter().next().unwrap();
             let mut assigned = false;
 
-            for i in 0..num_voices {
-                if voices[i].is_empty() || voices[i].last().unwrap().end <= note.start {
-                    voices[i].push(note.clone());
-                    if i == 0 {
-                        last_melody_note = Some(note.note);
-                    }
-                    assigned = true;
-                    break;
-                }
-            }
-
-            if !assigned {
-                // 드롭
-            }
-        } else {
-            simultaneous.sort_by(|a, b| b.note.cmp(&a.note));
-
-            // 멜로디 선택
-            let melody = if let Some(last_note) = last_melody_note {
-                let candidates: Vec<(i32, Note)> = simultaneous
-                    .iter()
-                    .map(|n| {
-                        let distance = (n.note as i32 - last_note as i32).abs();
-                        (distance, n.clone())
-                    })
-                    .collect();
-
-                let close_notes: Vec<Note> = candidates
-                    .iter()
-                    .filter(|(d, _)| *d <= 12)
-                    .map(|(_, n)| n.clone())
-                    .collect();
-
-                if !close_notes.is_empty() {
-                    close_notes.into_iter().max_by_key(|n| n.note).unwrap()
-                } else {
-                    simultaneous[0].clone()
-                }
+            // 고음(Note 72 이상) 또는 이전 멜로디와 가까운 음이면 Voice 0에 우선 할당
+            let is_high_note = note.note >= 72;
+            let is_close_to_melody = if let Some(last_note) = last_melody_note {
+                (note.note as i32 - last_note as i32).abs() <= 5
             } else {
-                simultaneous[0].clone()
+                false
             };
 
-            let bass = simultaneous.last().unwrap().clone();
-
-            let mut remaining: Vec<Note> = simultaneous
-                .iter()
-                .filter(|n| n.note != melody.note && n.note != bass.note)
-                .cloned()
-                .collect();
-            remaining.sort_by(|a, b| b.velocity.cmp(&a.velocity));
-
-            let mut priority_notes = vec![melody.clone()];
-            if simultaneous.len() > 1 && bass.note != melody.note {
-                priority_notes.push(bass);
+            // Voice 0에 우선 할당해야 하는 경우
+            if is_high_note || is_close_to_melody {
+                if voices.is_empty() {
+                    voices.push(Vec::new());
+                }
+                
+                if voices[0].is_empty() || voices[0].last().unwrap().end <= note.start {
+                    voices[0].push(note.clone());
+                    last_melody_note = Some(note.note);
+                    assigned = true;
+                } else {
+                    let last_v0_note = voices[0].last().unwrap();
+                    if is_high_note && last_v0_note.note < note.note {
+                        if let Some(last_note_mut) = voices[0].last_mut() {
+                            last_note_mut.end = note.start;
+                            last_note_mut.duration = note.start.saturating_sub(last_note_mut.start);
+                        }
+                        voices[0].push(note.clone());
+                        last_melody_note = Some(note.note);
+                        assigned = true;
+                    }
+                }
             }
-            priority_notes.extend(remaining);
-
-            for note in priority_notes {
-                let mut assigned = false;
-                for i in 0..num_voices {
+            
+            if !assigned {
+                // 사용 가능한 voice 찾기 또는 새로 생성
+                let mut found = false;
+                for i in 0..voices.len() {
                     if voices[i].is_empty() || voices[i].last().unwrap().end <= note.start {
                         voices[i].push(note.clone());
                         if i == 0 {
                             last_melody_note = Some(note.note);
                         }
-                        assigned = true;
+                        found = true;
                         break;
                     }
                 }
+                
+                if !found {
+                    // 새 voice 생성
+                    let mut new_voice = Vec::new();
+                    new_voice.push(note.clone());
+                    voices.push(new_voice);
+                }
+            }
+        } else {
+            // 다성 화음 - 높은 음부터 정렬
+            simultaneous.sort_by(|a, b| b.note.cmp(&a.note));
 
+            // 멜로디 선택: 가장 높은 음을 기본으로, 이전 음과의 연속성 고려
+            let melody_idx = if let Some(last_note) = last_melody_note {
+                let mut candidates_within_range = Vec::new();
+                for (idx, note) in simultaneous.iter().enumerate() {
+                    let distance = (note.note as i32 - last_note as i32).abs();
+                    if distance <= 5 {
+                        candidates_within_range.push((idx, note.note, distance));
+                    }
+                }
+                
+                if !candidates_within_range.is_empty() {
+                    candidates_within_range.sort_by(|a, b| b.1.cmp(&a.1));
+                    candidates_within_range[0].0
+                } else {
+                    0
+                }
+            } else {
+                0
+            };
+
+            let melody = simultaneous[melody_idx].clone();
+            let bass = simultaneous.last().unwrap().clone();
+
+            // 나머지 화음은 중간 음들 - 음높이 순서 유지
+            let harmony_notes: Vec<Note> = simultaneous
+                .iter()
+                .filter(|n| n.note != melody.note && n.note != bass.note)
+                .cloned()
+                .collect();
+
+            // 할당 우선순위: 멜로디 -> 베이스 -> 화음들 (높은 음부터)
+            let mut priority_notes = vec![melody.clone()];
+            if bass.note != melody.note {
+                priority_notes.push(bass);
+            }
+            priority_notes.extend(harmony_notes);
+
+            // 각 노트를 voice에 할당
+            for (idx, note) in priority_notes.iter().enumerate() {
+                let mut assigned = false;
+                
+                // 멜로디(첫 번째 노트)이고 고음인 경우 Voice 0 조기 종료 시도
+                if idx == 0 && note.note >= 72 {
+                    if voices.is_empty() {
+                        voices.push(Vec::new());
+                    }
+                    
+                    if !voices[0].is_empty() && voices[0].last().unwrap().end > note.start {
+                        let last_v0_note = voices[0].last().unwrap();
+                        if last_v0_note.note < note.note {
+                            if let Some(last_note_mut) = voices[0].last_mut() {
+                                last_note_mut.end = note.start;
+                                last_note_mut.duration = note.start.saturating_sub(last_note_mut.start);
+                            }
+                            voices[0].push(note.clone());
+                            last_melody_note = Some(note.note);
+                            assigned = true;
+                        }
+                    } else if voices[0].is_empty() || voices[0].last().unwrap().end <= note.start {
+                        voices[0].push(note.clone());
+                        last_melody_note = Some(note.note);
+                        assigned = true;
+                    }
+                }
+                
                 if !assigned {
-                    // 드롭
+                    // 사용 가능한 voice 찾기
+                    for i in 0..voices.len() {
+                        if voices[i].is_empty() || voices[i].last().unwrap().end <= note.start {
+                            voices[i].push(note.clone());
+                            if i == 0 {
+                                last_melody_note = Some(note.note);
+                            }
+                            assigned = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if !assigned {
+                    // 새 voice 생성
+                    let mut new_voice = Vec::new();
+                    new_voice.push(note.clone());
+                    voices.push(new_voice);
                 }
             }
         }
