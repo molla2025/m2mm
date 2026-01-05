@@ -14,14 +14,6 @@ crate-type = ["lib", "cdylib", "staticlib"]
 name = "mobinogi-mml-converter"
 path = "src/main.rs"
 
-[[bin]]
-name = "analyze"
-path = "src/bin/analyze.rs"
-
-[[bin]]
-name = "full_analysis"
-path = "src/bin/full_analysis.rs"
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

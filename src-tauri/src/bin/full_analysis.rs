@@ -140,7 +140,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         
         // Check voice states at this timing
         let mut voices_occupied = 0;
-        for (v_idx, voice) in voices.iter().enumerate() {
+        for (_v_idx, voice) in voices.iter().enumerate() {
             let mut has_overlap = false;
             for note in voice {
                 if note.start < *timing && note.end > *timing {
@@ -161,7 +161,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
     
     let mut losses_by_chord_size: HashMap<usize, (usize, usize)> = HashMap::new();
-    for (timing, original_count, lost_notes) in &loss_details {
+    for (_timing, original_count, lost_notes) in &loss_details {
         let entry = losses_by_chord_size.entry(*original_count).or_insert((0, 0));
         entry.0 += 1; // count of occurrences
         entry.1 += lost_notes.len(); // total notes lost
