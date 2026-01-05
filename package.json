@@ -1,6 +1,6 @@
 {
   "name": "mobinogi-mml-converter",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "MIDI to Mobinogi MML Converter",
   "type": "module",
   "scripts": {
