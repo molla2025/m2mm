@@ -4,7 +4,10 @@ MIDI 파일을 마비노기 모바일 MML 형식으로 변환하는 프로그램
 
 ## 📥 다운로드
 
-**[최신 버전 다운로드 (v1.1.0)](https://drive.google.com/file/d/1GGnDze2b9k71TVpGITMgMA1AKTJXM91I/view?usp=sharing)**
+| 버전 | 다운로드 링크 | 비고 |
+|------|--------------|------|
+| **v1.1.0** | **[다운로드](https://drive.google.com/file/d/1Yz3U6Iuu5EYBGvpL2GgeRhbpvbo5xoOO/view?usp=sharing)** | **최신 버전** - 화음 변환, 템포 변경 지원 |
+| ~~v1.0.0~~ | ~~[다운로드](https://drive.google.com/file/d/1GGnDze2b9k71TVpGITMgMA1AKTJXM91I/view?usp=sharing)~~ | ~~초기 릴리즈~~ |
 
 Windows 10/11 (64-bit) 지원
 
