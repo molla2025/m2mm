@@ -171,7 +171,7 @@
   // 악기/역할별 색상 반환 (은은하게)
   function getRoleColor(name: string): { bg: string; border: string } {
     const nameLower = name.toLowerCase()
-    
+
     // 악기별 색상 (악기별 변환 모드)
     if (nameLower.includes("piano")) {
       return { bg: "from-blue-500/8 to-indigo-500/5", border: "border-blue-500/25" }
@@ -196,7 +196,7 @@
     } else if (nameLower.includes("harp") || nameLower.includes("bell")) {
       return { bg: "from-sky-500/8 to-blue-400/5", border: "border-sky-500/25" }
     }
-    
+
     // 역할별 색상 (화음 변환 모드)
     if (name.includes("멜로디")) {
       return { bg: "from-rose-500/8 to-pink-500/5", border: "border-rose-500/25" }
@@ -205,7 +205,7 @@
     } else if (name.includes("베이스")) {
       return { bg: "from-amber-500/8 to-orange-500/5", border: "border-amber-500/25" }
     }
-    
+
     // 기본 (일반 변환 모드)
     return { bg: "from-slate-600/8 to-slate-700/5", border: "border-slate-600/25" }
   }
@@ -234,7 +234,7 @@
     >
       <span>Contact: molla202512@gmail.com</span>
       <span class="px-2 py-0.5 rounded-full border border-slate-600/50"
-        >v1.2.0</span
+        >v1.1.0</span
       >
     </div>
   </header>
@@ -259,7 +259,7 @@
                 bind:value={conversionMode}
               >
                 <option value="normal">일반 변환</option>
-                <option value="chord">화음 변환 (음역대별)</option>
+                <option value="chord">화음 변환</option>
                 <option value="instrument">악기별 변환</option>
               </select>
             </div>
@@ -378,15 +378,23 @@
                 class="rounded-full px-3 py-1.5 border border-slate-600/60 flex items-center justify-between bg-slate-900/90 {originalSeconds ===
                 convertedSeconds
                   ? 'border-green-500/50 bg-green-500/5'
-                  : 'border-sky-500/50 bg-sky-500/5'}"
+                  : 'border-amber-500/50 bg-amber-500/5'}"
               >
                 <span class="text-[11px] text-slate-400">변환 러닝타임</span>
                 <span
                   class="text-xs font-medium {originalSeconds ===
                   convertedSeconds
                     ? 'text-green-400'
-                    : 'text-sky-400'}">{convTime}</span
+                    : 'text-amber-400'}">{convTime}</span
                 >
+              </div>
+            {/if}
+            {#if result.voices.length > 0 && Math.floor(result.original_duration) > Math.floor(Math.max(...result.voices.map(v => v.duration)))}
+              <div class="alert alert-warning rounded-xl p-2 text-[10px] bg-amber-500/10 border border-amber-500/40 text-amber-200 flex items-start gap-2">
+                <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>글자 수 제한으로 일부 구간이 잘렸습니다</span>
               </div>
             {/if}
           </div>
@@ -418,8 +426,19 @@
           class="flex-1 rounded-2xl bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/30 p-3 shadow-2xl shadow-slate-950/60 min-h-0 flex flex-col"
         >
           {#if result.voices.length > 0}
-            <div class="mb-3 pb-2 border-b border-slate-700/50">
+            {@const sortedNoteCounts = [...result.voices].map(v => v.note_count).sort((a, b) => a - b)}
+            {@const medianNotes = sortedNoteCounts.length % 2 === 0
+              ? (sortedNoteCounts[sortedNoteCounts.length / 2 - 1] + sortedNoteCounts[sortedNoteCounts.length / 2]) / 2
+              : sortedNoteCounts[Math.floor(sortedNoteCounts.length / 2)]}
+            {@const q1Index = Math.floor(sortedNoteCounts.length * 0.25)}
+            {@const q1Notes = sortedNoteCounts[q1Index]}
+            <div class="mb-3 pb-2 border-b border-slate-700/50 flex items-center justify-between">
               <h3 class="text-xs font-semibold text-slate-300">변환된 파트 <span class="text-slate-500">({result.voices.length}개)</span></h3>
+              <div class="flex items-center gap-2 text-[10px]">
+                <span class="text-success">● 많음</span>
+                <span class="text-slate-400">● 보통</span>
+                <span class="text-error">● 적음</span>
+              </div>
             </div>
             <div class="overflow-y-auto min-h-0 flex-1">
               <div
@@ -427,10 +446,11 @@
               >
                 {#each result.voices as voice, idx}
                   {@const roleColor = getRoleColor(voice.name)}
+                  {@const noteColor = voice.note_count >= medianNotes ? 'text-success' : voice.note_count <= q1Notes ? 'text-error' : 'text-slate-300'}
                   <article
                     class="rounded-xl p-3 border flex flex-col gap-2.5 h-fit relative transition-all duration-300 {copiedIndex ===
                     idx
-                      ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/10 border-green-400/60 shadow-[0_0_30px_rgba(34,197,94,0.4)]'
+                      ? 'bg-success/10 border-success/60 shadow-[0_0_30px_rgba(34,197,94,0.4)]'
                       : `bg-gradient-to-br ${roleColor.bg} ${roleColor.border}`}"
                   >
                     <div class="flex justify-between items-start gap-2">
@@ -438,13 +458,13 @@
                         <h3
                           class="text-xs font-medium transition-colors {copiedIndex ===
                           idx
-                            ? 'text-green-300'
+                            ? 'text-success'
                             : ''}"
                         >
                           {voice.name}
                         </h3>
                         <p class="text-[11px] text-slate-400 mt-0.5">
-                          <span class="font-semibold text-slate-300">{voice.note_count}개</span> 음표 · {voice.char_count}자
+                          <span class="font-semibold {noteColor}">{voice.note_count}개</span> 음표 · {voice.char_count}자
                         </p>
                       </div>
                     </div>
