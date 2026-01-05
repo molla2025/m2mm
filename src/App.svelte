@@ -167,6 +167,51 @@
     errorMessage = ""
     copiedIndex = -1
   }
+
+  // 역할별 색상 반환
+  function getRoleColor(name: string): { bg: string; border: string; badge: string; badgeText: string; icon: string } {
+    if (name.includes("멜로디")) {
+      return {
+        bg: "from-rose-500/10 to-pink-500/5",
+        border: "border-rose-500/40",
+        badge: "bg-rose-500/20 text-rose-200",
+        badgeText: "🎤 멜로디",
+        icon: "🎤"
+      }
+    } else if (name.includes("화음")) {
+      return {
+        bg: "from-purple-500/10 to-violet-500/5",
+        border: "border-purple-500/40",
+        badge: "bg-purple-500/20 text-purple-200",
+        badgeText: "🎹 화음",
+        icon: "🎹"
+      }
+    } else if (name.includes("베이스")) {
+      return {
+        bg: "from-amber-500/10 to-orange-500/5",
+        border: "border-amber-500/40",
+        badge: "bg-amber-500/20 text-amber-200",
+        badgeText: "🎸 베이스",
+        icon: "🎸"
+      }
+    } else {
+      // 악기별 변환
+      return {
+        bg: "from-cyan-500/10 to-blue-500/5",
+        border: "border-cyan-500/40",
+        badge: "bg-cyan-500/20 text-cyan-200",
+        badgeText: "🎺 악기",
+        icon: "🎺"
+      }
+    }
+  }
+
+  // 음표 수 기준 정렬 및 우선순위 표시
+  $effect(() => {
+    if (result?.voices) {
+      result.voices.sort((a, b) => b.note_count - a.note_count)
+    }
+  })
 </script>
 
 <div
@@ -217,6 +262,7 @@
                 bind:value={conversionMode}
               >
                 <option value="normal">일반 변환</option>
+                <option value="chord">화음 변환 (음역대별)</option>
                 <option value="instrument">악기별 변환</option>
               </select>
             </div>
@@ -375,33 +421,61 @@
           class="flex-1 rounded-2xl bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/30 p-3 shadow-2xl shadow-slate-950/60 min-h-0 flex flex-col"
         >
           {#if result.voices.length > 0}
-            <div class="mb-3 pb-2 border-b border-slate-700/50">
-              <h3 class="text-xs font-semibold text-slate-300">변환된 파트</h3>
+            <div class="mb-3 pb-2 border-b border-slate-700/50 flex items-center justify-between">
+              <h3 class="text-xs font-semibold text-slate-300">변환된 파트 <span class="text-slate-500">({result.voices.length}개)</span></h3>
+              <p class="text-[10px] text-slate-500">음표 수 많은 순</p>
             </div>
             <div class="overflow-y-auto min-h-0 flex-1">
               <div
                 class="flex flex-col md:grid md:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2 md:gap-3"
               >
                 {#each result.voices as voice, idx}
+                  {@const roleColor = getRoleColor(voice.name)}
+                  {@const priority = idx < 3 ? "높음" : idx < 6 ? "중간" : "낮음"}
+                  {@const priorityColor = idx < 3 ? "text-green-400" : idx < 6 ? "text-yellow-400" : "text-slate-500"}
                   <article
                     class="rounded-xl p-3 border flex flex-col gap-2.5 h-fit relative transition-all duration-300 {copiedIndex ===
                     idx
                       ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/10 border-green-400/60 shadow-[0_0_30px_rgba(34,197,94,0.4)]'
-                      : 'bg-slate-950/50 border-slate-700/80'}"
+                      : `bg-gradient-to-br ${roleColor.bg} ${roleColor.border}`}"
                   >
-                    <div class="flex justify-between items-start gap-2">
-                      <div>
-                        <h3
-                          class="text-xs font-medium transition-colors {copiedIndex ===
-                          idx
-                            ? 'text-green-300'
-                            : ''}"
-                        >
-                          {voice.name}
-                        </h3>
-                        <p class="text-[11px] text-slate-500 mt-0.5">
-                          {voice.note_count}개 음표 · {voice.char_count}자
-                        </p>
+                    <!-- 우선순위 뱃지 -->
+                    {#if idx < 6}
+                      <div class="absolute -top-2 -right-2 px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-900 border border-slate-700 {priorityColor}">
+                        {idx + 1}순위
+                      </div>
+                    {/if}
+                    
+                    <div class="flex flex-col gap-2">
+                      <div class="flex items-center gap-2">
+                        <span class="text-lg">{roleColor.icon}</span>
+                        <div class="flex-1 min-w-0">
+                          <h3
+                            class="text-xs font-medium transition-colors truncate {copiedIndex ===
+                            idx
+                              ? 'text-green-300'
+                              : ''}"
+                          >
+                            {voice.name}
+                          </h3>
+                          <div class="flex items-center gap-1.5 mt-0.5">
+                            <span class="text-[10px] px-1.5 py-0.5 rounded {roleColor.badge}">
+                              {roleColor.badgeText.split(" ")[1]}
+                            </span>
+                            <span class="text-[10px] text-slate-500">우선순위: {priority}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div class="flex items-center justify-between text-[11px]">
+                        <div class="flex items-center gap-2">
+                          <span class="text-slate-300 font-semibold">🎵 {voice.note_count}개</span>
+                          <span class="text-slate-500">·</span>
+                          <span class="text-slate-500">{voice.char_count}자</span>
+                        </div>
+                        {#if idx < 3}
+                          <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-300 font-medium">추천</span>
+                        {/if}
                       </div>
                     </div>
 

@@ -331,6 +331,50 @@ pub fn extract_midi_notes(midi_data: &[u8], _min_duration: u32) -> Result<(Vec<N
     Ok((deduplicated, bpm, tempo_changes_converted))
 }
 
+// 음역대별 역할 기반 Voice 할당 (화음 모드)
+pub fn allocate_voices_by_range(notes: Vec<Note>) -> Vec<Vec<Note>> {
+    // 음역대별로 노트 분류
+    // 저음부 (O2-O3): note < 60 (C4) - 베이스
+    // 중음부 (O3-O4): 60 <= note < 72 (C5) - 화음/반주
+    // 고음부 (O5+): note >= 72 - 멜로디
+    
+    let mut bass_notes = Vec::new();
+    let mut chord_notes = Vec::new();
+    let mut melody_notes = Vec::new();
+    
+    for note in notes {
+        if note.note < 60 {
+            bass_notes.push(note);
+        } else if note.note < 72 {
+            chord_notes.push(note);
+        } else {
+            melody_notes.push(note);
+        }
+    }
+    
+    let mut voices: Vec<Vec<Note>> = Vec::new();
+    
+    // 1. 멜로디 파트 (고음부) - 스마트 할당
+    if !melody_notes.is_empty() {
+        let melody_voices = allocate_voices_smart(melody_notes);
+        voices.extend(melody_voices);
+    }
+    
+    // 2. 화음 파트 (중음부) - 스마트 할당
+    if !chord_notes.is_empty() {
+        let chord_voices = allocate_voices_smart(chord_notes);
+        voices.extend(chord_voices);
+    }
+    
+    // 3. 베이스 파트 (저음부) - 스마트 할당
+    if !bass_notes.is_empty() {
+        let bass_voices = allocate_voices_smart(bass_notes);
+        voices.extend(bass_voices);
+    }
+    
+    voices
+}
+
 pub fn allocate_voices_smart(notes: Vec<Note>) -> Vec<Vec<Note>> {
     let mut voices: Vec<Vec<Note>> = Vec::new();
 

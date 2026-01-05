@@ -10,7 +10,7 @@ mod converter;
 mod utils;
 mod analyzer;
 
-use converter::{allocate_voices_smart, extract_midi_notes, generate_mml_final, Note, TempoChange, TPB};
+use converter::{allocate_voices_smart, allocate_voices_by_range, extract_midi_notes, generate_mml_final, Note, TempoChange, TPB};
 
 // 틱을 실제 시간(초)으로 변환
 fn ticks_to_seconds(ticks: u32, bpm: u32) -> f64 {
@@ -146,6 +146,9 @@ fn convert_midi_internal(
     let voices = if options.mode == "instrument" {
         // 악기별 모드
         convert_by_instrument(notes, bpm, options.char_limit, options.compress_mode, &tempo_changes)?
+    } else if options.mode == "chord" {
+        // 화음 모드 (음역대별)
+        convert_by_chord(notes, bpm, options.char_limit, options.compress_mode, &tempo_changes)?
     } else {
         // 일반 모드 (피치별)
         convert_by_pitch(notes, bpm, options.char_limit, options.compress_mode, &tempo_changes)?
@@ -159,6 +162,155 @@ fn convert_midi_internal(
         total_notes,
         original_duration,
     })
+}
+
+fn convert_by_chord(
+    notes: Vec<Note>,
+    bpm: u32,
+    char_limit: usize,
+    compress_mode: bool,
+    tempo_changes: &[TempoChange],
+) -> Result<Vec<VoiceResult>, String> {
+    let voices = allocate_voices_by_range(notes);
+
+    // 빈 voice 제거
+    let voices: Vec<Vec<Note>> = voices.into_iter().filter(|v| !v.is_empty()).collect();
+
+    if voices.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // 최대 end_time 찾기
+    let max_end_time = voices
+        .iter()
+        .flat_map(|v| v.iter())
+        .map(|n| n.end)
+        .max()
+        .unwrap_or(0);
+
+    if max_end_time == 0 {
+        return Ok(Vec::new());
+    }
+
+    // 먼저 전체 길이가 char_limit을 만족하는지 체크
+    let mut full_length_valid = true;
+    for voice in voices.iter() {
+        let first_note = voice[0].note;
+        let mut start_octave = (first_note as i32 / 12) - 1;
+        start_octave = start_octave.max(2).min(6);
+
+        let mml = generate_mml_final(&voice, bpm, start_octave, compress_mode, tempo_changes);
+
+        if mml.len() > char_limit {
+            full_length_valid = false;
+            break;
+        }
+    }
+
+    // 전체 길이가 OK면 그대로 사용
+    let best_end_time = if full_length_valid {
+        max_end_time
+    } else {
+        // 이진 탐색으로 모든 voice가 char_limit 이하인 최대 end_time 찾기
+        let grid_size = 24u32;
+        let mut left = 0u32;
+        let mut right = max_end_time;
+        let mut best = 0u32;
+
+        while left <= right {
+            let mid = ((left + right) / 2 / grid_size) * grid_size;
+            if mid == 0 {
+                break;
+            }
+
+            let mut all_valid = true;
+
+            // 각 voice를 mid 시간까지 크롭해서 char_limit 체크
+            for voice in voices.iter() {
+                let cropped: Vec<Note> = voice.iter().filter(|n| n.start < mid).cloned().collect();
+
+                if cropped.is_empty() {
+                    continue;
+                }
+
+                let first_note = cropped[0].note;
+                let mut start_octave = (first_note as i32 / 12) - 1;
+                start_octave = start_octave.max(2).min(6);
+
+                let mml = generate_mml_final(&cropped, bpm, start_octave, compress_mode, tempo_changes);
+
+                if mml.len() > char_limit {
+                    all_valid = false;
+                    break;
+                }
+            }
+
+            if all_valid {
+                best = mid;
+                left = mid + grid_size;
+            } else {
+                right = mid.saturating_sub(grid_size);
+            }
+        }
+
+        best
+    };
+
+    // best_end_time으로 모든 voice 최종 크롭
+    let mut results = Vec::new();
+    let mut melody_count = 0;
+    let mut chord_count = 0;
+    let mut bass_count = 0;
+    
+    for voice in voices.iter() {
+        let final_voice: Vec<Note> = voice
+            .iter()
+            .filter(|n| n.start < best_end_time)
+            .cloned()
+            .collect();
+
+        if final_voice.is_empty() {
+            continue;
+        }
+
+        let first_note = final_voice[0].note;
+        let mut start_octave = (first_note as i32 / 12) - 1;
+        start_octave = start_octave.max(2).min(6);
+
+        let mml_code = generate_mml_final(&final_voice, bpm, start_octave, compress_mode, tempo_changes);
+        let note_count = final_voice.len();
+        
+        // 각 voice의 실제 마지막 노트 end 시간 계산
+        let actual_end = final_voice.iter().map(|n| n.end).max().unwrap_or(0);
+        let end_time = ticks_to_seconds(actual_end, bpm);
+
+        // 평균 음높이로 역할 판단
+        let avg_note = final_voice.iter().map(|n| n.note as u32).sum::<u32>() / final_voice.len() as u32;
+        let name = if avg_note >= 72 {
+            melody_count += 1;
+            if melody_count == 1 {
+                "멜로디".to_string()
+            } else {
+                format!("멜로디{}", melody_count)
+            }
+        } else if avg_note >= 60 {
+            chord_count += 1;
+            format!("화음{}", chord_count)
+        } else {
+            bass_count += 1;
+            format!("베이스{}", bass_count)
+        };
+
+        results.push(VoiceResult {
+            name,
+            content: mml_code.clone(),
+            char_count: mml_code.len(),
+            note_count,
+            duration: end_time,
+        });
+    }
+
+    Ok(results)
 }
 
 fn convert_by_pitch(
@@ -272,7 +424,10 @@ fn convert_by_pitch(
 
         let mml_code = generate_mml_final(&final_voice, bpm, start_octave, compress_mode, tempo_changes);
         let note_count = final_voice.len();
-        let end_time = ticks_to_seconds(best_end_time, bpm);
+        
+        // 각 voice의 실제 마지막 노트 end 시간 계산
+        let actual_end = final_voice.iter().map(|n| n.end).max().unwrap_or(0);
+        let end_time = ticks_to_seconds(actual_end, bpm);
 
         let name = if idx == 0 {
             "멜로디".to_string()
@@ -429,7 +584,10 @@ fn convert_by_instrument(
 
         let mml_code = generate_mml_final(&final_voice, bpm, start_octave, compress_mode, tempo_changes);
         let note_count = final_voice.len();
-        let end_time = ticks_to_seconds(best_end_time, bpm);
+        
+        // 각 voice의 실제 마지막 노트 end 시간 계산
+        let actual_end = final_voice.iter().map(|n| n.end).max().unwrap_or(0);
+        let end_time = ticks_to_seconds(actual_end, bpm);
 
         let name = if idx == 0 {
             format!("멜로디 ({})", instrument_name)
