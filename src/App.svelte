@@ -168,30 +168,46 @@
     copiedIndex = -1
   }
 
-  // 역할별 색상 반환 (은은하게)
+  // 악기/역할별 색상 반환 (은은하게)
   function getRoleColor(name: string): { bg: string; border: string } {
-    if (name.includes("멜로디")) {
-      return {
-        bg: "from-rose-500/5 to-pink-500/5",
-        border: "border-rose-500/20"
-      }
-    } else if (name.includes("화음")) {
-      return {
-        bg: "from-purple-500/5 to-violet-500/5",
-        border: "border-purple-500/20"
-      }
-    } else if (name.includes("베이스")) {
-      return {
-        bg: "from-amber-500/5 to-orange-500/5",
-        border: "border-amber-500/20"
-      }
-    } else {
-      // 악기별 변환
-      return {
-        bg: "from-slate-800/50 to-slate-900/50",
-        border: "border-slate-700/30"
-      }
+    const nameLower = name.toLowerCase()
+    
+    // 악기별 색상 (악기별 변환 모드)
+    if (nameLower.includes("piano")) {
+      return { bg: "from-blue-500/8 to-indigo-500/5", border: "border-blue-500/25" }
+    } else if (nameLower.includes("guitar")) {
+      return { bg: "from-orange-500/8 to-red-500/5", border: "border-orange-500/25" }
+    } else if (nameLower.includes("bass")) {
+      return { bg: "from-amber-600/8 to-yellow-600/5", border: "border-amber-600/25" }
+    } else if (nameLower.includes("string") || nameLower.includes("violin") || nameLower.includes("viola") || nameLower.includes("cello")) {
+      return { bg: "from-purple-500/8 to-violet-500/5", border: "border-purple-500/25" }
+    } else if (nameLower.includes("brass") || nameLower.includes("trumpet") || nameLower.includes("trombone") || nameLower.includes("horn")) {
+      return { bg: "from-yellow-500/8 to-amber-400/5", border: "border-yellow-500/25" }
+    } else if (nameLower.includes("sax") || nameLower.includes("clarinet") || nameLower.includes("oboe") || nameLower.includes("bassoon")) {
+      return { bg: "from-green-500/8 to-emerald-500/5", border: "border-green-500/25" }
+    } else if (nameLower.includes("flute") || nameLower.includes("piccolo") || nameLower.includes("recorder")) {
+      return { bg: "from-cyan-500/8 to-teal-500/5", border: "border-cyan-500/25" }
+    } else if (nameLower.includes("organ")) {
+      return { bg: "from-red-500/8 to-rose-500/5", border: "border-red-500/25" }
+    } else if (nameLower.includes("synth") || nameLower.includes("pad") || nameLower.includes("lead")) {
+      return { bg: "from-fuchsia-500/8 to-pink-500/5", border: "border-fuchsia-500/25" }
+    } else if (nameLower.includes("drum") || nameLower.includes("percussion")) {
+      return { bg: "from-slate-500/8 to-gray-500/5", border: "border-slate-500/25" }
+    } else if (nameLower.includes("harp") || nameLower.includes("bell")) {
+      return { bg: "from-sky-500/8 to-blue-400/5", border: "border-sky-500/25" }
     }
+    
+    // 역할별 색상 (화음 변환 모드)
+    if (name.includes("멜로디")) {
+      return { bg: "from-rose-500/8 to-pink-500/5", border: "border-rose-500/25" }
+    } else if (name.includes("화음")) {
+      return { bg: "from-purple-500/8 to-violet-500/5", border: "border-purple-500/25" }
+    } else if (name.includes("베이스")) {
+      return { bg: "from-amber-500/8 to-orange-500/5", border: "border-amber-500/25" }
+    }
+    
+    // 기본 (일반 변환 모드)
+    return { bg: "from-slate-600/8 to-slate-700/5", border: "border-slate-600/25" }
   }
 </script>
 
@@ -417,13 +433,6 @@
                       ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/10 border-green-400/60 shadow-[0_0_30px_rgba(34,197,94,0.4)]'
                       : `bg-gradient-to-br ${roleColor.bg} ${roleColor.border}`}"
                   >
-                    <!-- 상위 3개만 추천 표시 -->
-                    {#if idx < 3}
-                      <div class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center text-[11px] shadow-lg">
-                        ⭐
-                      </div>
-                    {/if}
-                    
                     <div class="flex justify-between items-start gap-2">
                       <div class="flex-1 min-w-0">
                         <h3
