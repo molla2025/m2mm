@@ -192,7 +192,7 @@
     >
       <span>Contact: molla202512@gmail.com</span>
       <span class="px-2 py-0.5 rounded-full border border-slate-600/50"
-        >v1.0.0</span
+        >v1.2.0</span
       >
     </div>
   </header>
