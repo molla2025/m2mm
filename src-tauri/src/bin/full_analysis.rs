@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Extract and convert
-    let (extracted_notes, bpm) = converter::extract_midi_notes(&midi_data, 24)?;
+    let (extracted_notes, bpm, _tempo_changes) = converter::extract_midi_notes(&midi_data, 24)?;
     println!("═══ Extraction Phase ═══");
     println!("  Notes extracted: {}", extracted_notes.len());
     println!("  Notes lost in extraction: {}", analysis.notes.len() - extracted_notes.len());

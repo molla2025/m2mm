@@ -18,6 +18,7 @@ pub struct NoteEvent {
     pub duration_ticks: u32,
     pub start_time_ms: f64,
     pub end_time_ms: f64,
+    #[allow(dead_code)]
     pub instrument: String,
 }
 

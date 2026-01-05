@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Conversion Test ===\n");
     
     match converter::extract_midi_notes(&midi_data, 24) {
-        Ok((notes, bpm)) => {
+        Ok((notes, bpm, tempo_changes)) => {
             println!("✓ Extracted {} notes successfully", notes.len());
             println!("✓ BPM: {}", bpm);
             
@@ -342,7 +342,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let mut start_octave = (first_note as i32 / 12) - 1;
                     start_octave = start_octave.max(2).min(6);
                     
-                    let mml = converter::generate_mml_final(&voice, bpm, start_octave, false);
+                    let mml = converter::generate_mml_final(&voice, bpm, start_octave, false, &tempo_changes);
                     
                     println!("Voice {}: {} chars", idx, mml.len());
                     println!("  First 200 chars: {}", 
