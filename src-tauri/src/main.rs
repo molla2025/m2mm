@@ -22,6 +22,9 @@ const MAX_VOICES: usize = 6;
 const SOLO_VOICES: usize = 3;
 // 2인 모드 보이스 수 (앞 3개 + 베이스 1개)
 const DUO_VOICES: usize = 4;
+// 악보 1칸 글자 수 기본값(현재 게임 한도). 게임사가 늘리면 이 값만 바꾸면 됨 (1200 → 2400 전례).
+// ※ 프론트엔드 App.svelte 의 MML_CHAR_LIMIT 와 같은 값으로 유지할 것.
+const DEFAULT_CHAR_LIMIT: usize = 2400;
 
 // 틱을 실제 시간(초)으로 변환
 fn ticks_to_seconds(ticks: u32, bpm: u32) -> f64 {
@@ -79,7 +82,7 @@ struct AppSettings {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            char_limit: 2400,
+            char_limit: DEFAULT_CHAR_LIMIT,
             mode: "solo".to_string(),
         }
     }

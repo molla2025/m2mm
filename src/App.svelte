@@ -34,7 +34,9 @@
   let pendingBytes: number[] | null = null
   let result = $state<ConversionResult | null>(null)
   let fileName = $state("")
-  let charLimit = $state(2400)
+  // 모비노기 악보 1칸 글자 수 한도. 게임사가 늘리면 이 값만 바꾸면 됨 (1200 → 2400 으로 늘어난 전례 있음)
+  const MML_CHAR_LIMIT = 2400
+  let charLimit = $state(MML_CHAR_LIMIT)
   let mode = $state("solo") // "solo"(혼자 3) / "duo"(2인 4) / "ensemble"(합주 6)
   let errorMessage = $state("")
   let copiedIndex = $state(-1)
@@ -347,7 +349,10 @@
               <li>
                 합주는 카드의 <b>번호 순서대로</b> — 시작자가 1번을 열고 나머지가 차례로 합류해요.
               </li>
-              <li>한 파트(악보)는 최대 <b>2,400자</b>. 곡이 길면 그 한도에 맞춰 뒷부분이 잘릴 수 있어요.</li>
+              <li>
+                한 파트(악보)는 최대 <b>{charLimit.toLocaleString()}자</b>. 곡이 길면 그 한도에 맞춰
+                뒷부분이 잘릴 수 있어요.
+              </li>
             </ul>
           </div>
         </div>
@@ -432,7 +437,7 @@
               <span class="text-xs font-medium text-base-content/70">악보 한 칸 최대 글자 수</span>
               <span
                 class="tooltip tooltip-right text-base-content/35"
-                data-tip="모비노기 악보 한 칸의 글자 수 제한이에요 (현재 2,400자). 곡이 길면 이 한도에 맞춰 자동으로 잘립니다."
+                data-tip={`모비노기 악보 한 칸의 글자 수 제한이에요 (현재 ${charLimit.toLocaleString()}자). 곡이 길면 이 한도에 맞춰 자동으로 잘립니다.`}
               >
                 <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
