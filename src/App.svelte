@@ -387,7 +387,7 @@
         <p class="text-[11px] text-base-content/45">MIDI → 모비노기 MML 변환기</p>
       </div>
     </div>
-    <span class="badge badge-outline badge-sm text-base-content/50">v0.1.2</span>
+    <span class="badge badge-outline badge-sm text-base-content/50">v0.1.3</span>
   </header>
 
   <!-- Main content -->
