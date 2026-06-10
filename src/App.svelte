@@ -199,45 +199,34 @@
     copiedIndex = -1
   }
 
-  // 동시음 개수 → 필요한 연주 인원 (한 명이 동시음 3개까지 담당)
-  function playersNeeded(simultaneous: number): number {
-    return Math.max(1, Math.ceil(simultaneous / 3))
-  }
-
-  // 분석 결과로 추천 모드와 설명을 만든다.
-  // 확실히 여러 악기(앙상블)일 때만 화음(동시음 6개)을 추천하고, 그 외엔 단독(동시음 3개).
+  // 분석 결과로 추천 모드와 안내 문구를 만든다.
+  // 웬만하면 단독을 추천하고, 단독이 확실히 버거운 경우(악기 많음 / 동시음 매우 많음)만 화음을 추천.
   function getRecommendation(a: MidiAnalysis): {
     solo: boolean
-    title: string
-    detail: string
+    text: string
     warn: string
-    fullPlayers: number // 곡을 온전히 들으려면 필요한 인원
   } {
-    const fullPlayers = playersNeeded(a.max_polyphony)
-
     if (a.instruments >= 5) {
-      const warn =
-        a.instruments > 6
-          ? `악기가 ${a.instruments}종이나 돼서 동시음 6개에 다 못 담아요. 중요한 악기 위주로만 변환되고 일부는 빠집니다.`
-          : ""
       return {
         solo: false,
-        title: "화음 (동시음 6개) 추천",
-        detail: `악기가 ${a.instruments}종이라 여러 악기를 나눠 담는 화음 모드를 추천해요.`,
-        warn,
-        fullPlayers,
+        text: `악기가 ${a.instruments}종으로 많아요. 혼자서는 다 살리기 어려우니 6명이 한 음씩 맡는 화음 연주가 더 좋을 거예요. (단독으로도 되지만 일부 악기가 빠져요.)`,
+        warn:
+          a.instruments > 6
+            ? `악기가 ${a.instruments}종이나 돼서 화음(동시음 6개)에도 다 못 담아요. 중요한 악기 위주로만 변환되고 일부는 빠집니다.`
+            : "",
       }
     }
-
+    if (a.max_polyphony >= 12) {
+      return {
+        solo: false,
+        text: `동시에 울리는 음이 최대 ${a.max_polyphony}개로 아주 많아요. 혼자서는 빠지는 음이 많으니 화음 연주가 더 좋을 거예요. (단독도 가능은 해요.)`,
+        warn: "",
+      }
+    }
     return {
       solo: true,
-      title: "단독 (동시음 3개) 추천",
-      detail:
-        a.instruments <= 1
-          ? "악기 1종이라 혼자(동시음 3개)로도 충분히 표현돼요."
-          : `악기 ${a.instruments}종이지만 핵심만 추리면 혼자(동시음 3개)로 충분해요. 다 살리고 싶으면 화음(동시음 6개)도 고를 수 있어요.`,
+      text: "혼자서 연주하기 좋은 곡이에요. 단독 연주를 추천해요.",
       warn: "",
-      fullPlayers,
     }
   }
 
@@ -400,27 +389,12 @@
               <span>음표 {analysis!.total_notes.toLocaleString()}개</span>
             </div>
 
-            <div class="rounded-2xl border border-primary/40 bg-primary/5 p-4">
-              <div class="flex items-center gap-2">
-                <span class="badge badge-primary badge-sm">추천</span>
-                <span class="text-sm font-semibold">{rec.title}</span>
-              </div>
-              <p class="mt-2 text-xs leading-relaxed text-base-content/65">{rec.detail}</p>
-            </div>
-
-            <!-- 온전히 들으려면 필요한 인원 하이라이트 -->
+            <!-- 추천은 글로만 -->
             <div
-              class="mt-3 flex items-center gap-3 rounded-2xl border border-accent/50 bg-accent/10 p-3"
+              class="flex items-start gap-2 rounded-2xl border border-base-300 bg-base-100 p-3"
             >
-              <span class="text-2xl">👥</span>
-              <div class="min-w-0">
-                <p class="text-sm font-bold text-accent">
-                  이 곡을 온전히 들으려면 {rec.fullPlayers}명 필요
-                </p>
-                <p class="text-[11px] text-base-content/55">
-                  한 명이 동시음 3개씩 맡아요 · 이 곡 최대 동시음 {analysis!.max_polyphony}개
-                </p>
-              </div>
+              <span class="text-base leading-none">💡</span>
+              <p class="text-xs leading-relaxed text-base-content/70">{rec.text}</p>
             </div>
 
             {#if rec.warn}
@@ -429,23 +403,18 @@
               </div>
             {/if}
 
+            <!-- 연주 방식 선택 (단독 위 / 화음 아래 고정) -->
             <div class="mt-4 flex flex-col gap-2">
               {#if isConverting}
                 <button class="btn btn-primary btn-block" disabled>
                   <span class="loading loading-spinner loading-sm"></span> 변환 중…
                 </button>
               {:else}
-                <button
-                  class="btn btn-primary btn-block"
-                  onclick={() => convertWithMode(rec.solo)}
-                >
-                  {rec.solo ? "단독(동시음 3개)" : "화음(동시음 6개)"}으로 변환
+                <button class="btn btn-primary btn-block" onclick={() => convertWithMode(true)}>
+                  단독 연주 <span class="font-normal opacity-75">· 혼자 (동시음 3개)</span>
                 </button>
-                <button
-                  class="btn btn-outline btn-sm btn-block"
-                  onclick={() => convertWithMode(!rec.solo)}
-                >
-                  {rec.solo ? "화음(동시음 6개)" : "단독(동시음 3개)"}으로 변환
+                <button class="btn btn-outline btn-block" onclick={() => convertWithMode(false)}>
+                  화음 연주 <span class="font-normal opacity-75">· 6명 (동시음 6개)</span>
                 </button>
               {/if}
             </div>
@@ -482,7 +451,7 @@
               <span class="text-base-content/25">·</span>
               <span>동시음 {result.voices.length}개</span>
               <span class="text-base-content/25">·</span>
-              <span>연주 {playersNeeded(result.voices.length)}명</span>
+              <span>{solo ? "혼자 연주" : `${result.voices.length}명 합주`}</span>
               <span class="text-base-content/25">·</span>
               <span>러닝타임 {fmtTime(convDuration)}</span>
             </div>
