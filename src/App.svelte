@@ -26,7 +26,7 @@
   let result = $state<ConversionResult | null>(null)
   let fileName = $state("")
   let charLimit = $state(2400)
-  let solo = $state(false) // true: 단독(3보이스), false: 화음(6보이스)
+  let solo = $state(true) // true: 단독(3보이스), false: 화음(6보이스)
   let errorMessage = $state("")
   let copiedIndex = $state(-1)
   let copyTimerId: number | null = null

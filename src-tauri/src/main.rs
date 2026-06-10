@@ -69,7 +69,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             char_limit: 2400,
-            solo: false,
+            solo: true,
         }
     }
 }
