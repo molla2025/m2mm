@@ -33,7 +33,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": ["msi", "nsis"],
     "icon": ["icons/icon.ico"],
     "windows": {
       "certificateThumbprint": null,
