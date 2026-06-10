@@ -272,57 +272,81 @@
   {#if showHelp}
     <!-- 연주 방법 도움말 모달 -->
     <div class="modal modal-open" role="dialog" aria-modal="true">
-      <div class="modal-box max-w-md border border-base-300 bg-base-200">
-        <h3 class="mb-3 text-base font-bold">🎵 연주 방법</h3>
+      <div class="modal-box max-w-lg border border-base-300 bg-base-200">
+        <h3 class="mb-3 text-base font-bold">🎵 연주 방법 (상세)</h3>
 
         <div class="space-y-4 text-xs leading-relaxed text-base-content/80">
           <div>
-            <p class="mb-1 font-semibold text-base-content">모드별 기본</p>
-            <ul class="space-y-1 text-base-content/70">
+            <p class="mb-1 font-semibold text-base-content">① 동시음 = 여러 단음을 겹치기</p>
+            <p class="text-base-content/70">
+              MML 한 악보엔 단음(한 번에 한 음) 파트를 여러 개 넣을 수 있고, 그것들이 동시에 울려 화음이
+              돼요. 한 악보엔 최대 <b>6파트(동시음 6개)</b>까지. 이 앱은 곡을 멜로디·화음·베이스 파트로
+              쪼개서, 가장 중요한 <b>맨 위(멜로디)</b>와 <b>맨 아래(베이스)</b>를 먼저 살리고 가운데 화음은
+              자리가 남는 만큼 채워요.
+            </p>
+          </div>
+
+          <div>
+            <p class="mb-1 font-semibold text-base-content">② 누가 몇 파트를 맡나 (핵심)</p>
+            <ul class="list-disc space-y-1 pl-4 text-base-content/70">
               <li>
-                🎹 <span class="font-semibold text-primary">단독</span> — <span
-                  class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span
-                > 악기로 혼자 (3파트)
+                <b class="text-warning">곡을 처음 여는 사람(시작자)</b>만 1·2·3화음 악기를 골라 한 번에
+                <b>최대 3파트</b>까지 혼자 맡을 수 있어요. (3화음 = 3파트 동시)
               </li>
               <li>
-                🎻 <span class="font-semibold text-secondary">2인</span> — 시작자
-                <span class="font-semibold text-warning">3화음</span>(앞 3파트) + 참여자
-                <span class="font-semibold text-info">1화음</span>(베이스)
+                <b class="text-info">나중에 들어오는 사람(참여자)</b>은 어떤 악기를 들었든
+                <b>무조건 1파트(1화음)</b>. 여러 파트 특권은 시작자에게만 있어요.
               </li>
               <li>
-                🎶 <span class="font-semibold text-info">합주</span> — 사람마다
-                <span class="font-semibold text-info">1화음</span> 악기로 한 파트씩
+                시작자가 여러 파트를 한 번에 치려면 그 파트들이 <b>같은 악기</b>여야 해요 — 악기 하나는 한
+                음색이라, 3화음 피아노로 피아노 3줄은 ✓ 지만 피아노+트럼펫 동시는 ✗.
               </li>
             </ul>
           </div>
 
           <div>
-            <p class="mb-1 font-semibold text-base-content">규칙</p>
-            <ul class="list-disc space-y-1 pl-4 text-base-content/70">
+            <p class="mb-1 font-semibold text-base-content">③ 모드별 구성</p>
+            <ul class="space-y-1.5 text-base-content/70">
               <li>
-                곡을 처음 <b>여는 사람(시작자)</b>만 1·2·3화음 악기를 골라 한 번에 그 수만큼 파트를 맡을 수
-                있어요.
+                🎹 <span class="font-semibold text-primary">단독 · 1명</span> — 시작자가
+                <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span> 악기로
+                멜로디+화음 <b>3파트</b>를 혼자 다 연주. 핵심 3줄만 추려 담아요.
               </li>
               <li>
-                <b>나중에 들어오는 사람</b>은 어떤 악기를 들었든 항상 <b>1파트(1화음)</b>만 맡습니다.
+                🎻 <span class="font-semibold text-secondary">2인 · 2명</span> — 시작자가 3화음으로
+                <b>앞 3파트</b>, 참여자 1명이 1화음으로 <b>베이스</b>. 동시음 <b>4개</b> 커버 — 저음을 따로
+                떼서 더 탄탄해요.
               </li>
               <li>
-                시작자가 여러 파트를 한 번에 치려면 그 파트들이 <b>같은 악기</b>여야 해요. (3화음
-                피아노로 피아노 3줄 ✓ / 피아노+트럼펫 ✗)
+                🎶 <span class="font-semibold text-info">합주 · 최대 6명</span> — 6파트를 악기별로 나눠요.
+                같은 악기 파트가 여러 개면 시작자가 묶고, 나머지는 1명당 1파트.
               </li>
             </ul>
           </div>
 
           <div class="rounded-xl border border-accent/30 bg-accent/5 p-3">
-            <p class="mb-1 font-semibold text-accent">고급 — 인원 줄이기</p>
+            <p class="mb-1 font-semibold text-accent">④ 고급 — 인원 줄이기 (전략)</p>
             <p class="text-base-content/70">
-              같은 악기 파트가 여러 개면 시작자가 묶어서 인원을 줄일 수 있어요.
+              같은 악기 파트가 여러 개면 시작자가 3화음으로 한 번에 잡아 인원을 줄일 수 있어요. 인원 ↔ 악기
+              준비의 전략 차이예요.
             </p>
             <p class="mt-2 text-[11px] text-base-content/60">
               예) 피아노 3 + 금관 2 + 현악 1 (총 6파트)<br />
-              → 시작자가 <span class="font-semibold text-warning">3화음 피아노</span>로 피아노 3줄(1명) +
-              금관·현악 3명 = <b class="text-accent">4명</b> (전략에 따라 최대 6명)
+              · 시작자 = <span class="font-semibold text-warning">3화음 피아노</span> → 피아노 3줄 (1명)<br
+              />
+              · 금관 2명 + 현악 1명 (각 1화음)<br />
+              → <b class="text-accent">최소 4명</b> · 전부 1화음씩 나누면 6명
             </p>
+          </div>
+
+          <div>
+            <p class="mb-1 font-semibold text-base-content">⑤ 그 외</p>
+            <ul class="list-disc space-y-1 pl-4 text-base-content/70">
+              <li>
+                합주는 카드의 <b>번호 순서대로</b> — 시작자가 1번을 열고 나머지가 차례로 합류해요.
+              </li>
+              <li>한 파트(악보)는 최대 <b>2,400자</b>. 곡이 길면 그 한도에 맞춰 뒷부분이 잘릴 수 있어요.</li>
+            </ul>
           </div>
         </div>
 
