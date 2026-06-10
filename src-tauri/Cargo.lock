@@ -1884,7 +1884,7 @@ dependencies = [
 
 [[package]]
 name = "mobinogi-mml-converter"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "midly",
  "serde",
