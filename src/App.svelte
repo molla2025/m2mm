@@ -246,14 +246,9 @@
     return ROLE_STYLES.neutral
   }
 
-  // 최소 연주 인원: 곡 여는 사람이 최대 3파트, 나머지는 1명당 1파트 → max(1, 파트수 - 2)
-  function minPlayers(voices: number): number {
-    return Math.max(1, voices - 2)
-  }
-
-  // 연주 인원 규칙 상세 (툴팁)
+  // 연주 인원 규칙 — 고급 전략 (툴팁)
   const PLAY_RULE_TIP =
-    "곡을 처음 여는 사람만 1~3화음 악기를 골라 최대 3파트까지 맡을 수 있어요. 나중에 들어오는 사람은 모두 1화음(1파트)이에요.\n예) 6파트 → 시작자가 3화음으로 3파트 + 3명이 1파트씩 = 4명. 또는 6명이 1파트씩 = 6명. (전략 차이)"
+    "[고급] 곡을 여는 사람만 1~3화음 악기를 골라 한 번에 최대 3파트(같은 악기)까지 맡을 수 있어요. 같은 악기 파트가 여러 개면 그만큼 인원을 줄일 수 있어요.\n예) 6파트 → 시작자가 3화음으로 3파트 + 3명이 1파트씩 = 4명."
 
   function fmtTime(seconds: number): string {
     const s = Math.floor(seconds)
@@ -418,8 +413,8 @@
                   </p>
                 {/if}
                 <p class="flex items-center gap-1 text-base-content/55">
-                  ※ 곡 여는 사람만 <span class="font-semibold text-warning">1~3화음</span>, 나머지는
-                  <span class="font-semibold text-info">1화음</span>씩.
+                  ※ 단독은 <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span>
+                  악기로 혼자, 합주는 각자 <span class="font-semibold text-info">1화음</span> 악기로!
                   <span
                     class="tooltip tooltip-top cursor-help font-semibold text-base-content/40 before:max-w-[18rem] before:whitespace-pre-line before:text-left"
                     data-tip={PLAY_RULE_TIP}>ⓘ</span
@@ -489,9 +484,7 @@
               <span>동시음 {result.voices.length}개</span>
               <span class="text-base-content/25">·</span>
               <span class="inline-flex items-center gap-1">
-                {minPlayers(result.voices.length) === 1
-                  ? "혼자 연주"
-                  : `최소 ${minPlayers(result.voices.length)}명`}
+                {mode === "solo" ? "혼자 연주" : mode === "duo" ? "2명" : `${result.voices.length}명`}
                 <span
                   class="tooltip tooltip-bottom cursor-help text-base-content/35 before:max-w-[18rem] before:whitespace-pre-line before:text-left"
                   data-tip={PLAY_RULE_TIP}>ⓘ</span
@@ -539,7 +532,7 @@
           >
             <span class="text-sm leading-none">🎹</span>
             <span>
-              <span class="font-semibold text-info">단독</span> —
+              <span class="font-semibold text-info">단독</span> — 반드시
               <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span> 악기로
               <b>혼자</b> 연주하세요.
             </span>
@@ -563,9 +556,9 @@
           >
             <span class="text-sm leading-none">🎻</span>
             <span>
-              <span class="font-semibold text-info">합주</span> — 시작자
-              <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span>이면 최소
-              <b>{minPlayers(result.voices.length)}명</b>, <b>번호 순서대로</b> 참여하세요.
+              <span class="font-semibold text-info">합주</span> —
+              <b>{result.voices.length}명</b>이 각자 <span class="font-semibold text-info">1화음</span>
+              악기로 한 파트씩, <b>번호 순서대로</b> 참여하세요.
             </span>
           </div>
         {/if}
