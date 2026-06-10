@@ -26,6 +26,7 @@
   let result = $state<ConversionResult | null>(null)
   let fileName = $state("")
   let charLimit = $state(2400)
+  let solo = $state(false) // true: 단독(3보이스), false: 화음(6보이스)
   let errorMessage = $state("")
   let copiedIndex = $state(-1)
   let copyTimerId: number | null = null
@@ -54,8 +55,11 @@
 
     // Rust 백엔드에서 설정 불러오기
     try {
-      const settings = await invoke<{ char_limit: number }>("load_settings")
+      const settings = await invoke<{ char_limit: number; solo: boolean }>(
+        "load_settings",
+      )
       charLimit = settings.char_limit
+      solo = settings.solo
     } catch (error) {
       console.error("Failed to load settings:", error)
     }
@@ -114,7 +118,7 @@
 
     // 변환 시작할 때 현재 설정 저장
     try {
-      await invoke("save_settings", { charLimit })
+      await invoke("save_settings", { charLimit, solo })
     } catch (error) {
       console.error("Failed to save settings:", error)
     }
@@ -125,7 +129,7 @@
 
       const conversionResult = await invoke<ConversionResult>("convert_midi", {
         midiData: Array.from(bytes),
-        options: { char_limit: charLimit },
+        options: { char_limit: charLimit, solo },
       })
 
       if (conversionResult.success) {
@@ -269,6 +273,42 @@
               </div>
             {/if}
           </button>
+
+          <!-- 변환 모드 -->
+          <div class="rounded-2xl border border-base-300 bg-base-200/60 px-4 py-3">
+            <div class="mb-2 flex items-center gap-1.5">
+              <span class="text-xs font-medium text-base-content/70">변환 모드</span>
+              <span
+                class="tooltip tooltip-right text-base-content/35"
+                data-tip="단독: 혼자 연주용으로 가장 중요한 3개 라인만. 화음: 여러 사람/악기용으로 최대 6보이스."
+              >
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </span>
+            </div>
+            <div class="join w-full">
+              <button
+                type="button"
+                class="btn btn-sm join-item flex-1 {solo ? 'btn-primary' : 'btn-outline'}"
+                onclick={() => (solo = true)}
+              >
+                단독 <span class="opacity-60">3보이스</span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm join-item flex-1 {!solo ? 'btn-primary' : 'btn-outline'}"
+                onclick={() => (solo = false)}
+              >
+                화음 <span class="opacity-60">6보이스</span>
+              </button>
+            </div>
+          </div>
 
           <!-- 글자 수 설정 -->
           <div class="rounded-2xl border border-base-300 bg-base-200/60 px-4 py-3">

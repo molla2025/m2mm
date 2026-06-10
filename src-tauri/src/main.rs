@@ -10,13 +10,15 @@ mod converter;
 mod utils;
 
 use converter::{
-    allocate_voices_by_instrument, extract_midi_notes, generate_mml_final, Note, TempoChange,
-    GRID_SIZE, TPB,
+    allocate_voices_by_instrument, allocate_voices_capped, extract_midi_notes, generate_mml_final,
+    Note, TempoChange, GRID_SIZE, TPB,
 };
 use utils::mml::gm_family_name;
 
-// 모비노기 모바일 한 악보의 최대 보이스 수
+// 화음(합주) 모드 최대 보이스 수
 const MAX_VOICES: usize = 6;
+// 단독(혼자) 모드 보이스 수
+const SOLO_VOICES: usize = 3;
 
 // 틱을 실제 시간(초)으로 변환
 fn ticks_to_seconds(ticks: u32, bpm: u32) -> f64 {
@@ -35,6 +37,7 @@ fn start_octave_for(first_note: u8) -> i32 {
 #[derive(Debug, Serialize, Deserialize)]
 struct ConversionOptions {
     char_limit: usize,
+    solo: bool, // true: 단독(3보이스), false: 화음(6보이스)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,11 +62,15 @@ struct ConversionResult {
 #[derive(Debug, Serialize, Deserialize)]
 struct AppSettings {
     char_limit: usize,
+    solo: bool,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
-        Self { char_limit: 2400 }
+        Self {
+            char_limit: 2400,
+            solo: false,
+        }
     }
 }
 
@@ -80,8 +87,8 @@ fn get_settings_path(app: tauri::AppHandle) -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
-fn save_settings(app: tauri::AppHandle, char_limit: usize) -> Result<(), String> {
-    let settings = AppSettings { char_limit };
+fn save_settings(app: tauri::AppHandle, char_limit: usize, solo: bool) -> Result<(), String> {
+    let settings = AppSettings { char_limit, solo };
 
     let settings_path = get_settings_path(app)?;
     let json = serde_json::to_string_pretty(&settings)
@@ -139,7 +146,7 @@ fn convert_midi_internal(
         ticks_to_seconds(max_end, bpm)
     };
 
-    let voices = convert_voices(notes, bpm, options.char_limit, &tempo_changes);
+    let voices = convert_voices(notes, bpm, options.char_limit, options.solo, &tempo_changes);
 
     Ok(ConversionResult {
         success: true,
@@ -255,15 +262,24 @@ fn avg_pitch(voice: &[Note]) -> u8 {
     (voice.iter().map(|n| n.note as u32).sum::<u32>() / voice.len() as u32) as u8
 }
 
-// 최대 6보이스를 악기 인지로 분배하고 이름을 붙인다.
-// - 여러 악기가 섞이면: 악기군 이름 + 번호 (피아노1, 피아노2, 기타1, 플룻1 …), 악기 중요도 순
-// - 단일 악기면: 멜로디 + 화음1, 화음2 … (음 높은 순)
+// 모드에 따라 보이스를 분배하고 이름을 붙인다.
+// - 단독(solo): 음높이 기반으로 가장 중요한 3보이스만 몰아넣고 멜로디/화음 역할 라벨
+// - 화음: 최대 6보이스를 악기 인지로 분배
+//   · 여러 악기면 악기군 이름 + 번호 (피아노1, 기타1, 플룻1 …), 악기 중요도 순
+//   · 단일 악기면 멜로디 + 화음1, 화음2 … (음 높은 순)
 fn convert_voices(
     notes: Vec<Note>,
     bpm: u32,
     char_limit: usize,
+    solo: bool,
     tempo_changes: &[TempoChange],
 ) -> Vec<VoiceResult> {
+    if solo {
+        // 단독: 악기 구분 없이 가장 중요한 라인 3개 (멜로디·베이스 보호)
+        let voices = allocate_voices_capped(notes, SOLO_VOICES);
+        return name_by_role(voices, bpm, char_limit, tempo_changes);
+    }
+
     let voices = allocate_voices_by_instrument(notes, MAX_VOICES);
 
     let distinct_instruments: std::collections::HashSet<u8> =
