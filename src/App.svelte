@@ -199,28 +199,24 @@
     copiedIndex = -1
   }
 
-  // 분석 결과로 추천 모드와 안내 문구를 만든다.
-  // 웬만하면 단독을 추천하고, 단독이 확실히 버거운 경우(악기 많음 / 동시음 매우 많음)만 화음을 추천.
-  function getRecommendation(a: MidiAnalysis): { text: string; warn: string } {
-    if (a.instruments >= 5) {
-      return {
-        text: `악기가 ${a.instruments}종으로 많아요. 혼자서는 다 살리기 어려우니 6명이 한 음씩 맡는 화음 연주가 더 좋을 거예요. (단독·2인으로도 되지만 일부 악기가 빠져요.)`,
-        warn:
-          a.instruments > 6
-            ? `악기가 ${a.instruments}종이나 돼서 화음(동시음 6개)에도 다 못 담아요. 중요한 악기 위주로만 변환되고 일부는 빠집니다.`
-            : "",
-      }
+  // 동시음이 이 이상이면 6화음으로도 원본을 다 못 담아 싱크가 어긋날 수 있는 경계
+  const TOO_MANY_SIMULTANEOUS = 20
+
+  // 분석 결과로 추천 모드와 경고를 만든다 (안내 문구는 템플릿에서 하이라이트로 렌더).
+  // 웬만하면 단독을 추천하고, 악기가 많거나(>=5) 동시음이 매우 많을 때(>=12)만 화음을 추천.
+  function getRecommendation(a: MidiAnalysis): {
+    mode: "solo" | "ensemble"
+    warn: string
+  } {
+    let warn = ""
+    if (a.max_polyphony >= TOO_MANY_SIMULTANEOUS) {
+      warn = `이 곡은 동시에 울리는 음이 최대 ${a.max_polyphony}개로 너무 많아요. 화음(6명)으로 변환해도 원본의 음을 다 못 담아 화음·싱크가 원본과 다를 수 있어요.`
+    } else if (a.instruments > 6) {
+      warn = `악기가 ${a.instruments}종이라 화음(6명)에도 다 못 담아요. 중요한 악기 위주로만 변환되고 일부는 빠집니다.`
     }
-    if (a.max_polyphony >= 12) {
-      return {
-        text: `동시에 울리는 음이 최대 ${a.max_polyphony}개로 아주 많아요. 혼자서는 빠지는 음이 많으니 화음 연주가 더 좋을 거예요. (베이스를 따로 둘 거면 2인도 괜찮아요.)`,
-        warn: "",
-      }
-    }
-    return {
-      text: "혼자서 연주하기 좋은 곡이에요. 단독 연주를 추천해요. (베이스를 한 명이 더 받쳐주려면 2인도 좋아요.)",
-      warn: "",
-    }
+
+    const mode = a.instruments >= 5 || a.max_polyphony >= 12 ? "ensemble" : "solo"
+    return { mode, warn }
   }
 
   // 역할/악기군 → daisyUI 시맨틱 색상 (전체 클래스 문자열을 정적으로 보유해야 Tailwind가 생성함)
@@ -382,12 +378,44 @@
               <span>음표 {analysis!.total_notes.toLocaleString()}개</span>
             </div>
 
-            <!-- 추천은 글로만 -->
+            <!-- 추천 안내 (하이라이트) -->
             <div
-              class="flex items-start gap-2 rounded-2xl border border-base-300 bg-base-100 p-3"
+              class="flex items-start gap-2 rounded-2xl border border-base-300 bg-base-100 p-3 text-xs leading-relaxed text-base-content/70"
             >
               <span class="text-base leading-none">💡</span>
-              <p class="text-xs leading-relaxed text-base-content/70">{rec.text}</p>
+              <div class="space-y-1">
+                {#if rec.mode === "solo"}
+                  <p>
+                    혼자서 연주하기 좋은 곡이에요.
+                    <span class="rounded bg-primary/15 px-1 font-bold text-primary">단독 연주</span>를
+                    추천해요. (베이스를 한 명이 더 받쳐주려면
+                    <span class="font-semibold text-secondary">2인</span>도 좋아요.)
+                  </p>
+                {:else}
+                  <p>
+                    {#if analysis!.instruments >= 5}
+                      악기가 <span class="font-semibold text-base-content/90"
+                        >{analysis!.instruments}종</span
+                      >으로 많아요.
+                    {:else}
+                      동시에 울리는 음이 최대
+                      <span class="font-semibold text-base-content/90"
+                        >{analysis!.max_polyphony}개</span
+                      >로 많아요.
+                    {/if}
+                    혼자선 다 살리기 어려우니
+                    <span class="rounded bg-primary/15 px-1 font-bold text-primary">화음 연주(6명)</span
+                    >가 더 좋아요. (단독·2인도 되지만 일부는 빠져요.)
+                  </p>
+                {/if}
+                <p class="text-base-content/55">
+                  ※ <span class="font-semibold text-warning">단독·2인</span>의 앞 파트는 반드시
+                  <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span>
+                  으로 표시된 악기로 연주하세요.
+                  <span class="font-semibold text-info">화음(6명)</span>은 각자
+                  <span class="font-semibold text-info">1화음</span> 악기예요.
+                </p>
+              </div>
             </div>
 
             {#if rec.warn}
@@ -492,7 +520,19 @@
           </div>
         {/if}
 
-        {#if mode === "duo" && result.voices.length > 1}
+        {#if mode === "solo"}
+          <!-- 단독 안내 -->
+          <div
+            class="flex items-start gap-2 rounded-2xl border border-info/40 bg-info/5 px-4 py-2.5 text-[11px] leading-relaxed text-base-content/70"
+          >
+            <span class="text-sm leading-none">🎹</span>
+            <span>
+              <span class="font-semibold text-info">단독 연주</span>
+              — 반드시 <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span>으로
+              표시된 악기를 끼고 <b>혼자</b> 연주하세요. (한 사람이 동시음 3개까지 담당)
+            </span>
+          </div>
+        {:else if mode === "duo" && result.voices.length > 1}
           <!-- 2인 안내 -->
           <div
             class="flex items-start gap-2 rounded-2xl border border-info/40 bg-info/5 px-4 py-2.5 text-[11px] leading-relaxed text-base-content/70"
@@ -500,8 +540,9 @@
             <span class="text-sm leading-none">🎻</span>
             <span>
               <span class="font-semibold text-info">2인용</span>
-              — 한 명이 <b>앞 파트(동시음 3개)</b>를 한꺼번에 맡고, 다른 한 명이 <b>마지막 베이스</b>를
-              받쳐줘요.
+              — 한 명은 <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span> 악기로
+              <b>앞 파트(동시음 3개)</b>를, 다른 한 명은 <span class="font-semibold">1화음</span> 악기로
+              <b>마지막 베이스</b>를 받쳐줘요.
             </span>
           </div>
         {:else if mode === "ensemble" && result.voices.length > 1}
@@ -512,8 +553,9 @@
             <span class="text-sm leading-none">🎻</span>
             <span>
               <span class="font-semibold text-info">{result.voices.length}명 합주용</span>
-              — 각자 단음 악기로 한 파트씩 맡아요. 아래 <b>번호 순서대로</b> 1번이 먼저 시작하고,
-              나머지가 차례로 합주에 참여하면 돼요.
+              — 각자 <span class="rounded bg-info/15 px-1 font-bold text-info">1화음</span> 악기로 한
+              파트씩 맡아요. 아래 <b>번호 순서대로</b> 1번이 먼저 시작하고, 나머지가 차례로 참여하면
+              돼요.
             </span>
           </div>
         {/if}
