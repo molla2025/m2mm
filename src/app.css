@@ -4,28 +4,62 @@
   themes: false;
 }
 
-/* ─── 커스텀 테마: m2mm (MIDI→MML 컨버터용 다크 스튜디오 톤) ─── */
+/* ─── 라이트 테마 (OS가 라이트 모드일 때 기본) ─── */
+@plugin "daisyui/theme" {
+  name: "m2mm-light";
+  default: true;
+  color-scheme: light;
+
+  /* 배경/표면 — 밝은 쿨 그레이 */
+  --color-base-100: oklch(99% 0.004 264);
+  --color-base-200: oklch(96% 0.007 264);
+  --color-base-300: oklch(90% 0.012 264);
+  --color-base-content: oklch(27% 0.025 264);
+
+  --color-primary: oklch(52% 0.2 258);
+  --color-primary-content: oklch(99% 0.01 258);
+  --color-secondary: oklch(53% 0.19 305);
+  --color-secondary-content: oklch(99% 0.01 305);
+  --color-accent: oklch(55% 0.12 196);
+  --color-accent-content: oklch(99% 0.01 196);
+
+  --color-neutral: oklch(38% 0.02 264);
+  --color-neutral-content: oklch(97% 0.01 264);
+
+  --color-info: oklch(54% 0.14 233);
+  --color-info-content: oklch(99% 0.01 233);
+  --color-success: oklch(55% 0.15 153);
+  --color-success-content: oklch(99% 0.01 153);
+  --color-warning: oklch(62% 0.15 72);
+  --color-warning-content: oklch(28% 0.06 72);
+  --color-error: oklch(56% 0.21 25);
+  --color-error-content: oklch(99% 0.01 25);
+
+  --radius-selector: 1rem;
+  --radius-field: 0.625rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* ─── 다크 테마 (OS가 다크 모드일 때) — 깊은 네이비-스튜디오 톤 ─── */
 @plugin "daisyui/theme" {
   name: "m2mm";
-  default: true;
   prefersdark: true;
   color-scheme: dark;
 
-  /* 배경/표면 — 깊은 네이비-슬레이트 */
   --color-base-100: oklch(20% 0.025 264);
   --color-base-200: oklch(24% 0.028 264);
   --color-base-300: oklch(29% 0.032 264);
   --color-base-content: oklch(93% 0.015 264);
 
-  /* primary — 시그니처 인디고/스카이 (멜로디) */
   --color-primary: oklch(68% 0.17 258);
   --color-primary-content: oklch(98% 0.01 258);
-
-  /* secondary — 바이올렛 (화음) */
   --color-secondary: oklch(70% 0.16 305);
   --color-secondary-content: oklch(98% 0.01 305);
-
-  /* accent — 시안 (강조/포인트) */
   --color-accent: oklch(78% 0.13 196);
   --color-accent-content: oklch(22% 0.04 196);
 
@@ -41,7 +75,6 @@
   --color-error: oklch(68% 0.2 25);
   --color-error-content: oklch(98% 0.01 25);
 
-  /* 라운드/형태 */
   --radius-selector: 1rem;
   --radius-field: 0.625rem;
   --radius-box: 1rem;
