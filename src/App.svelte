@@ -199,46 +199,46 @@
     copiedIndex = -1
   }
 
+  // 동시음 개수 → 필요한 연주 인원 (한 명이 동시음 3개까지 담당)
+  function playersNeeded(simultaneous: number): number {
+    return Math.max(1, Math.ceil(simultaneous / 3))
+  }
+
   // 분석 결과로 추천 모드와 설명을 만든다.
+  // 확실히 여러 악기(앙상블)일 때만 화음(동시음 6개)을 추천하고, 그 외엔 단독(동시음 3개).
   function getRecommendation(a: MidiAnalysis): {
     solo: boolean
     title: string
     detail: string
     warn: string
+    fullPlayers: number // 곡을 온전히 들으려면 필요한 인원
   } {
-    if (a.instruments >= 2) {
+    const fullPlayers = playersNeeded(a.max_polyphony)
+
+    if (a.instruments >= 5) {
       const warn =
         a.instruments > 6
-          ? `악기가 ${a.instruments}종이나 돼서 6보이스에 다 못 담아요. 중요한 악기 위주로만 변환되고 일부는 빠집니다.`
-          : a.max_polyphony > 12
-            ? "화음이 매우 두꺼워서 변환 품질이 떨어질 수 있어요."
-            : ""
+          ? `악기가 ${a.instruments}종이나 돼서 동시음 6개에 다 못 담아요. 중요한 악기 위주로만 변환되고 일부는 빠집니다.`
+          : ""
       return {
         solo: false,
-        title: "화음 (6보이스) 추천",
-        detail: `악기가 ${a.instruments}종이라 악기별로 나누는 화음 모드를 추천해요. 제대로 들으려면 최대 4명 합주가 필요해요 (1명이 3보이스, 나머지는 1명당 1보이스).`,
+        title: "화음 (동시음 6개) 추천",
+        detail: `악기가 ${a.instruments}종이라 여러 악기를 나눠 담는 화음 모드를 추천해요.`,
         warn,
+        fullPlayers,
       }
     }
-    if (a.max_polyphony <= 3) {
-      return {
-        solo: true,
-        title: "단독 (3보이스) 추천",
-        detail: "악기 1종에 동시음도 3개 이하라, 혼자(3보이스)로도 거의 그대로 변환돼요.",
-        warn: "",
-      }
-    }
-    return {
-      solo: false,
-      title: "화음 (6보이스) 추천",
-      detail: `악기는 1종이지만 화음이 두꺼운 편(최대 동시 ${a.max_polyphony}음)이라, 6보이스가 더 꽉 차게 담겨요. 혼자 칠 거면 단독(3보이스)도 괜찮아요.`,
-      warn: "",
-    }
-  }
 
-  // 보이스 수 → 필요한 연주 인원 (1명이 최대 3보이스, 그 뒤로 1명당 1보이스)
-  function playersNeeded(voices: number): number {
-    return Math.max(1, voices - 2)
+    return {
+      solo: true,
+      title: "단독 (동시음 3개) 추천",
+      detail:
+        a.instruments <= 1
+          ? "악기 1종이라 혼자(동시음 3개)로도 충분히 표현돼요."
+          : `악기 ${a.instruments}종이지만 핵심만 추리면 혼자(동시음 3개)로 충분해요. 다 살리고 싶으면 화음(동시음 6개)도 고를 수 있어요.`,
+      warn: "",
+      fullPlayers,
+    }
   }
 
   // 역할/악기군 → daisyUI 시맨틱 색상 (전체 클래스 문자열을 정적으로 보유해야 Tailwind가 생성함)
@@ -395,7 +395,7 @@
             >
               <span>악기 {analysis!.instruments}종</span>
               <span class="text-base-content/25">·</span>
-              <span>최대 동시 {analysis!.max_polyphony}음</span>
+              <span>최대 동시음 {analysis!.max_polyphony}개</span>
               <span class="text-base-content/25">·</span>
               <span>음표 {analysis!.total_notes.toLocaleString()}개</span>
             </div>
@@ -406,6 +406,21 @@
                 <span class="text-sm font-semibold">{rec.title}</span>
               </div>
               <p class="mt-2 text-xs leading-relaxed text-base-content/65">{rec.detail}</p>
+            </div>
+
+            <!-- 온전히 들으려면 필요한 인원 하이라이트 -->
+            <div
+              class="mt-3 flex items-center gap-3 rounded-2xl border border-accent/50 bg-accent/10 p-3"
+            >
+              <span class="text-2xl">👥</span>
+              <div class="min-w-0">
+                <p class="text-sm font-bold text-accent">
+                  이 곡을 온전히 들으려면 {rec.fullPlayers}명 필요
+                </p>
+                <p class="text-[11px] text-base-content/55">
+                  한 명이 동시음 3개씩 맡아요 · 이 곡 최대 동시음 {analysis!.max_polyphony}개
+                </p>
+              </div>
             </div>
 
             {#if rec.warn}
@@ -424,13 +439,13 @@
                   class="btn btn-primary btn-block"
                   onclick={() => convertWithMode(rec.solo)}
                 >
-                  {rec.solo ? "단독(3보이스)" : "화음(6보이스)"}으로 변환
+                  {rec.solo ? "단독(동시음 3개)" : "화음(동시음 6개)"}으로 변환
                 </button>
                 <button
                   class="btn btn-outline btn-sm btn-block"
                   onclick={() => convertWithMode(!rec.solo)}
                 >
-                  {rec.solo ? "화음(6보이스)" : "단독(3보이스)"}으로 변환
+                  {rec.solo ? "화음(동시음 6개)" : "단독(동시음 3개)"}으로 변환
                 </button>
               {/if}
             </div>
@@ -465,7 +480,7 @@
               <span class="text-base-content/25">·</span>
               <span>음표 {result.total_notes.toLocaleString()}개</span>
               <span class="text-base-content/25">·</span>
-              <span>{result.voices.length}개 파트</span>
+              <span>동시음 {result.voices.length}개</span>
               <span class="text-base-content/25">·</span>
               <span>연주 {playersNeeded(result.voices.length)}명</span>
               <span class="text-base-content/25">·</span>
