@@ -31,6 +31,8 @@ lerna-debug.log*
 # Tauri
 src-tauri/target
 src-tauri/WixTools
+# 빌드 때 자동 생성되는 권한 스키마 (Tauri 공식 템플릿도 무시함)
+src-tauri/gen/schemas
 
 # Build outputs
 *.exe
