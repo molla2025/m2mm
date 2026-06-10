@@ -438,8 +438,9 @@
     {:else if !result}
       {@const rec = getRecommendation(analysis!)}
       <!-- ── 2단계: 분석 결과 + 모드 추천 ── -->
-      <div class="grid h-full place-items-center p-6">
-        <div class="flex w-full max-w-md flex-col gap-4">
+      <div class="h-full overflow-y-auto">
+        <div class="flex min-h-full items-center justify-center p-6">
+          <div class="flex w-full max-w-md flex-col gap-4">
           <div class="rounded-3xl border border-base-300 bg-base-200/50 p-5 shadow-xl">
             <h2 class="truncate text-sm font-semibold">{fileName}</h2>
             <div
@@ -482,7 +483,7 @@
                     >가 더 좋아요. (단독·2인도 되지만 일부는 빠져요.)
                   </p>
                 {/if}
-                <p class="flex items-center gap-1 text-base-content/55">
+                <p class="text-base-content/55">
                   ※ 단독은 <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span>
                   악기로 혼자, 합주는 각자 <span class="font-semibold text-info">1화음</span> 악기로!
                   <button
@@ -534,6 +535,7 @@
           >
             ← 다른 파일 선택
           </button>
+          </div>
         </div>
       </div>
     {:else}
