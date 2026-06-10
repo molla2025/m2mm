@@ -109,18 +109,14 @@ fn find_tie_combination(
     result
 }
 
-// 안전한 근사치 찾기 (타이 없이)
+// 안전한 근사치 찾기 (타이 없이 단일 길이)
+// 원래 길이를 절대 넘지 않는 가장 큰 길이를 고른다.
+// → 위로 반올림하지 않으므로 타이밍이 밀리지 않고(드리프트 0), 값 기준 max라 동점이 없어 결정적이다.
+//   모자란 만큼은 다음 음 앞 쉼표로 흡수되어 전체 동기화는 유지된다.
 fn find_safe_approximation(ticks: u32, exact_lengths: &HashMap<u32, &str>) -> Vec<(String, u32)> {
-    let closest = exact_lengths
-        .keys()
-        .min_by_key(|&&x| ((x as i64) - (ticks as i64)).abs())
-        .copied()
-        .unwrap_or(FALLBACK_TICKS);
-
-    if let Some(&length_str) = exact_lengths.get(&closest) {
-        vec![(length_str.to_string(), closest)]
-    } else {
-        vec![(FALLBACK_LENGTH.to_string(), FALLBACK_TICKS)]
+    match exact_lengths.keys().copied().filter(|&x| x <= ticks).max() {
+        Some(t) => vec![(exact_lengths[&t].to_string(), t)],
+        None => vec![(FALLBACK_LENGTH.to_string(), FALLBACK_TICKS)],
     }
 }
 
@@ -589,7 +585,11 @@ pub fn generate_mml_final(voice_notes: &[Note], bpm: u32, start_octave: i32, tem
         }
     }
     if default_length == "8" && !length_counts.contains_key("8") {
-        if let Some(max_key) = length_counts.iter().max_by_key(|(_, &count)| count).map(|(k, _)| k) {
+        // 가장 흔한 길이. 동점이면 길이 문자열 기준으로 정해서 결정적으로 만든다.
+        if let Some((max_key, _)) = length_counts
+            .iter()
+            .max_by(|a, b| a.1.cmp(b.1).then_with(|| a.0.cmp(b.0)))
+        {
             default_length = max_key.clone();
         }
     }
@@ -818,6 +818,18 @@ mod tests {
         // 나머지(60, 72, 단선율 67)는 rest
         assert!(rest.iter().any(|n| n.note == 67), "단선율 멜로디는 베이스가 아님");
         assert_eq!(rest.len(), 3);
+    }
+
+    // 고음 길이 근사는 원래 길이를 절대 넘지 않아야 한다 (넘으면 타이밍이 밀림 = 드리프트).
+    #[test]
+    fn safe_approximation_never_overshoots() {
+        let ex = get_exact_lengths();
+        // 정확히 떨어지지 않는 길이들(24의 배수지만 정확 길이표에 없는 값들)
+        for ticks in [120u32, 168, 216, 240, 264, 312, 360, 1000, 2280] {
+            let r = find_safe_approximation(ticks, &ex);
+            let sum: u32 = r.iter().map(|(_, t)| t).sum();
+            assert!(sum <= ticks, "ticks={ticks} 인데 근사 합 {sum} 으로 초과(드리프트)");
+        }
     }
 
     // 아주 낮은/높은 음이 섞여도 MML 옥타브가 유효 범위(O1~O8)를 벗어나면 안 된다.
