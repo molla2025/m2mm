@@ -34,11 +34,20 @@
   "bundle": {
     "active": true,
     "targets": ["msi", "nsis"],
+    "createUpdaterArtifacts": true,
     "icon": ["icons/icon.ico"],
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
       "timestampUrl": ""
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI2QUVFRjMyNzk0MzMxOEYKUldTUE1VTjVNdSt1dHBVQzdaVllTSU5ybGlXVG5XdC8rcFkxRmJiQkxKMHUrQmRmcy8rUm0yazAK",
+      "endpoints": [
+        "https://github.com/molla2025/m2mm/releases/latest/download/latest.json"
+      ]
     }
   }
 }

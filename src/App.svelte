@@ -29,8 +29,29 @@
   let errorMessage = $state("")
   let copiedIndex = $state(-1)
   let copyTimerId: number | null = null
+  let isUpdating = $state(false)
+
+  // 앱 시작 시 새 버전이 있으면 자동으로 내려받아 설치하고 재시작
+  async function checkForUpdates() {
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater")
+      const update = await check()
+      if (update) {
+        isUpdating = true
+        await update.downloadAndInstall()
+        const { relaunch } = await import("@tauri-apps/plugin-process")
+        await relaunch()
+      }
+    } catch (error) {
+      console.error("업데이트 확인 실패:", error)
+      isUpdating = false
+    }
+  }
 
   onMount(async () => {
+    // 새 버전 자동 업데이트 (백그라운드, UI를 막지 않음)
+    checkForUpdates()
+
     // Rust 백엔드에서 설정 불러오기
     try {
       const settings = await invoke<{ char_limit: number }>("load_settings")
@@ -177,6 +198,19 @@
 </script>
 
 <div class="flex h-screen flex-col bg-base-100 text-base-content overflow-hidden">
+  {#if isUpdating}
+    <!-- 자동 업데이트 설치 중 오버레이 -->
+    <div
+      class="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-base-100/95 backdrop-blur-sm"
+    >
+      <span class="loading loading-spinner loading-lg text-primary"></span>
+      <div class="text-center">
+        <p class="text-sm font-semibold">새 버전 설치 중…</p>
+        <p class="mt-1 text-xs text-base-content/45">설치가 끝나면 자동으로 다시 시작됩니다</p>
+      </div>
+    </div>
+  {/if}
+
   <!-- Header -->
   <header
     class="flex items-center justify-between border-b border-base-300 bg-base-200/70 px-5 py-3 backdrop-blur-xl"
