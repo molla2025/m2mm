@@ -6,6 +6,10 @@ use crate::utils::mml::midi_to_note_name;
 pub const TPB: u32 = 384;
 pub const GRID_SIZE: u32 = 24;
 
+// MML 유효 옥타브 범위 (이 밖으로 나가면 O0/O-1/O9 같은 잘못된 토큰이 되어 깨짐)
+const MML_OCTAVE_MIN: i32 = 1;
+const MML_OCTAVE_MAX: i32 = 8;
+
 // 매칭 실패 시 기본 길이 (16분음표 = 96틱)
 const FALLBACK_LENGTH: &str = "16";
 const FALLBACK_TICKS: u32 = 96;
@@ -591,8 +595,9 @@ pub fn generate_mml_final(voice_notes: &[Note], bpm: u32, start_octave: i32, tem
             current_tick += push_rest(&mut mml, gap, &default_length, &exact_lengths);
         }
 
-        // 3) 옥타브 명령
-        let (note_name, octave) = midi_to_note_name(note.note);
+        // 3) 옥타브 명령 (MML 유효 범위로 클램프 — O0/음수/O9 같은 잘못된 토큰 방지)
+        let (note_name, raw_octave) = midi_to_note_name(note.note);
+        let octave = raw_octave.clamp(MML_OCTAVE_MIN, MML_OCTAVE_MAX);
         if octave != current_octave {
             mml.push(format!("O{}", octave));
             current_octave = octave;
@@ -768,6 +773,20 @@ mod tests {
         assert!(programs.contains(&0), "피아노가 대표되어야 함");
         assert!(programs.contains(&24), "기타가 대표되어야 함");
         assert!(programs.contains(&73), "플룻이 대표되어야 함");
+    }
+
+    // 아주 낮은/높은 음이 섞여도 MML 옥타브가 유효 범위(O1~O8)를 벗어나면 안 된다.
+    #[test]
+    fn mml_octave_stays_in_valid_range() {
+        let notes = vec![
+            note(5, 0, 384),     // 매우 낮은 음 (raw 옥타브 -1)
+            note(20, 384, 384),  // 낮은 음 (raw 옥타브 0)
+            note(120, 768, 384), // 매우 높은 음 (raw 옥타브 9)
+        ];
+        let mml = generate_mml_final(&notes, 120, 4, &[]);
+        assert!(!mml.contains("O-"), "음수 옥타브가 생성됨: {mml}");
+        assert!(!mml.contains("O0"), "O0이 생성됨: {mml}");
+        assert!(!mml.contains("O9"), "O9가 생성됨: {mml}");
     }
 
     // 캡 분배: 멜로디(최고음)와 베이스(최저음)는 보호되어야 한다.
