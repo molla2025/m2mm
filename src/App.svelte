@@ -35,7 +35,7 @@
   let result = $state<ConversionResult | null>(null)
   let fileName = $state("")
   let charLimit = $state(2400)
-  let solo = $state(true) // true: 단독(3보이스), false: 화음(6보이스)
+  let mode = $state("solo") // "solo"(혼자 3) / "duo"(2인 4) / "ensemble"(합주 6)
   let errorMessage = $state("")
   let copiedIndex = $state(-1)
   let copyTimerId: number | null = null
@@ -64,11 +64,11 @@
 
     // Rust 백엔드에서 설정 불러오기
     try {
-      const settings = await invoke<{ char_limit: number; solo: boolean }>(
+      const settings = await invoke<{ char_limit: number; mode: string }>(
         "load_settings",
       )
       charLimit = settings.char_limit
-      solo = settings.solo
+      mode = settings.mode
     } catch (error) {
       console.error("Failed to load settings:", error)
     }
@@ -144,14 +144,14 @@
   }
 
   // 선택한 모드로 실제 변환을 수행한다.
-  async function convertWithMode(soloMode: boolean) {
+  async function convertWithMode(m: string) {
     if (!pendingBytes) return
-    solo = soloMode
+    mode = m
     isConverting = true
     errorMessage = ""
 
     try {
-      await invoke("save_settings", { charLimit, solo })
+      await invoke("save_settings", { charLimit, mode })
     } catch (error) {
       console.error("Failed to save settings:", error)
     }
@@ -159,7 +159,7 @@
     try {
       const conversionResult = await invoke<ConversionResult>("convert_midi", {
         midiData: pendingBytes,
-        options: { char_limit: charLimit, solo },
+        options: { char_limit: charLimit, mode },
       })
 
       if (conversionResult.success) {
@@ -201,15 +201,10 @@
 
   // 분석 결과로 추천 모드와 안내 문구를 만든다.
   // 웬만하면 단독을 추천하고, 단독이 확실히 버거운 경우(악기 많음 / 동시음 매우 많음)만 화음을 추천.
-  function getRecommendation(a: MidiAnalysis): {
-    solo: boolean
-    text: string
-    warn: string
-  } {
+  function getRecommendation(a: MidiAnalysis): { text: string; warn: string } {
     if (a.instruments >= 5) {
       return {
-        solo: false,
-        text: `악기가 ${a.instruments}종으로 많아요. 혼자서는 다 살리기 어려우니 6명이 한 음씩 맡는 화음 연주가 더 좋을 거예요. (단독으로도 되지만 일부 악기가 빠져요.)`,
+        text: `악기가 ${a.instruments}종으로 많아요. 혼자서는 다 살리기 어려우니 6명이 한 음씩 맡는 화음 연주가 더 좋을 거예요. (단독·2인으로도 되지만 일부 악기가 빠져요.)`,
         warn:
           a.instruments > 6
             ? `악기가 ${a.instruments}종이나 돼서 화음(동시음 6개)에도 다 못 담아요. 중요한 악기 위주로만 변환되고 일부는 빠집니다.`
@@ -218,14 +213,12 @@
     }
     if (a.max_polyphony >= 12) {
       return {
-        solo: false,
-        text: `동시에 울리는 음이 최대 ${a.max_polyphony}개로 아주 많아요. 혼자서는 빠지는 음이 많으니 화음 연주가 더 좋을 거예요. (단독도 가능은 해요.)`,
+        text: `동시에 울리는 음이 최대 ${a.max_polyphony}개로 아주 많아요. 혼자서는 빠지는 음이 많으니 화음 연주가 더 좋을 거예요. (베이스를 따로 둘 거면 2인도 괜찮아요.)`,
         warn: "",
       }
     }
     return {
-      solo: true,
-      text: "혼자서 연주하기 좋은 곡이에요. 단독 연주를 추천해요.",
+      text: "혼자서 연주하기 좋은 곡이에요. 단독 연주를 추천해요. (베이스를 한 명이 더 받쳐주려면 2인도 좋아요.)",
       warn: "",
     }
   }
@@ -410,10 +403,16 @@
                   <span class="loading loading-spinner loading-sm"></span> 변환 중…
                 </button>
               {:else}
-                <button class="btn btn-primary btn-block" onclick={() => convertWithMode(true)}>
+                <button class="btn btn-primary btn-block" onclick={() => convertWithMode("solo")}>
                   단독 연주 <span class="font-normal opacity-75">· 혼자 (동시음 3개)</span>
                 </button>
-                <button class="btn btn-outline btn-block" onclick={() => convertWithMode(false)}>
+                <button class="btn btn-outline btn-block" onclick={() => convertWithMode("duo")}>
+                  2인 연주 <span class="font-normal opacity-75">· 2명 (동시음 4개, 베이스 분리)</span>
+                </button>
+                <button
+                  class="btn btn-outline btn-block"
+                  onclick={() => convertWithMode("ensemble")}
+                >
                   화음 연주 <span class="font-normal opacity-75">· 6명 (동시음 6개)</span>
                 </button>
               {/if}
@@ -451,7 +450,13 @@
               <span class="text-base-content/25">·</span>
               <span>동시음 {result.voices.length}개</span>
               <span class="text-base-content/25">·</span>
-              <span>{solo ? "혼자 연주" : `${result.voices.length}명 합주`}</span>
+              <span>
+                {mode === "solo"
+                  ? "혼자 연주"
+                  : mode === "duo"
+                    ? "2명 연주"
+                    : `${result.voices.length}명 합주`}
+              </span>
               <span class="text-base-content/25">·</span>
               <span>러닝타임 {fmtTime(convDuration)}</span>
             </div>
@@ -487,7 +492,19 @@
           </div>
         {/if}
 
-        {#if !solo && result.voices.length > 1}
+        {#if mode === "duo" && result.voices.length > 1}
+          <!-- 2인 안내 -->
+          <div
+            class="flex items-start gap-2 rounded-2xl border border-info/40 bg-info/5 px-4 py-2.5 text-[11px] leading-relaxed text-base-content/70"
+          >
+            <span class="text-sm leading-none">🎻</span>
+            <span>
+              <span class="font-semibold text-info">2인용</span>
+              — 한 명이 <b>앞 파트(동시음 3개)</b>를 한꺼번에 맡고, 다른 한 명이 <b>마지막 베이스</b>를
+              받쳐줘요.
+            </span>
+          </div>
+        {:else if mode === "ensemble" && result.voices.length > 1}
           <!-- 합주 참여 순서 안내 -->
           <div
             class="flex items-start gap-2 rounded-2xl border border-info/40 bg-info/5 px-4 py-2.5 text-[11px] leading-relaxed text-base-content/70"
@@ -515,10 +532,10 @@
                 >
                   <div class="flex items-center justify-between gap-2">
                     <div class="flex min-w-0 items-center gap-1.5">
-                      {#if !solo}
+                      {#if mode !== "solo"}
                         <span
                           class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-base-300 text-[10px] font-bold"
-                          title="합주 참여 순서">{idx + 1}</span
+                          title="파트 순서">{idx + 1}</span
                         >
                       {/if}
                       <span class="badge {style.badge} badge-sm font-medium">{voice.name}</span>

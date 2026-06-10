@@ -20,6 +20,8 @@ use std::collections::HashSet;
 const MAX_VOICES: usize = 6;
 // 단독(혼자) 모드 보이스 수
 const SOLO_VOICES: usize = 3;
+// 2인 모드 보이스 수 (앞 3개 + 베이스 1개)
+const DUO_VOICES: usize = 4;
 
 // 틱을 실제 시간(초)으로 변환
 fn ticks_to_seconds(ticks: u32, bpm: u32) -> f64 {
@@ -38,7 +40,7 @@ fn start_octave_for(first_note: u8) -> i32 {
 #[derive(Debug, Serialize, Deserialize)]
 struct ConversionOptions {
     char_limit: usize,
-    solo: bool, // true: 단독(3보이스), false: 화음(6보이스)
+    mode: String, // "solo"(혼자 3) / "duo"(2인 4) / "ensemble"(합주 6)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -71,14 +73,14 @@ struct MidiAnalysis {
 #[derive(Debug, Serialize, Deserialize)]
 struct AppSettings {
     char_limit: usize,
-    solo: bool,
+    mode: String,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             char_limit: 2400,
-            solo: true,
+            mode: "solo".to_string(),
         }
     }
 }
@@ -96,8 +98,8 @@ fn get_settings_path(app: tauri::AppHandle) -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
-fn save_settings(app: tauri::AppHandle, char_limit: usize, solo: bool) -> Result<(), String> {
-    let settings = AppSettings { char_limit, solo };
+fn save_settings(app: tauri::AppHandle, char_limit: usize, mode: String) -> Result<(), String> {
+    let settings = AppSettings { char_limit, mode };
 
     let settings_path = get_settings_path(app)?;
     let json = serde_json::to_string_pretty(&settings)
@@ -167,7 +169,7 @@ fn convert_midi_internal(
         ticks_to_seconds(max_end, bpm)
     };
 
-    let voices = convert_voices(notes, bpm, options.char_limit, options.solo, &tempo_changes);
+    let voices = convert_voices(notes, bpm, options.char_limit, &options.mode, &tempo_changes);
 
     Ok(ConversionResult {
         success: true,
@@ -284,32 +286,37 @@ fn avg_pitch(voice: &[Note]) -> u8 {
 }
 
 // 모드에 따라 보이스를 분배하고 이름을 붙인다.
-// - 단독(solo): 음높이 기반으로 가장 중요한 3보이스만 몰아넣고 멜로디/화음 역할 라벨
-// - 화음: 최대 6보이스를 악기 인지로 분배
-//   · 여러 악기면 악기군 이름 + 번호 (피아노1, 기타1, 플룻1 …), 악기 중요도 순
-//   · 단일 악기면 멜로디 + 화음1, 화음2 … (음 높은 순)
+// - solo(단독): 가장 중요한 3보이스. 멜로디 + 화음1, 화음2
+// - duo(2인): 4보이스. 앞 3개(멜로디·화음) + 마지막 베이스 (1명이 앞 3개, 1명이 베이스)
+// - ensemble(화음): 최대 6보이스를 악기 인지로 분배 (악기별 이름 / 단일이면 멜로디·화음)
 fn convert_voices(
     notes: Vec<Note>,
     bpm: u32,
     char_limit: usize,
-    solo: bool,
+    mode: &str,
     tempo_changes: &[TempoChange],
 ) -> Vec<VoiceResult> {
-    if solo {
-        // 단독: 악기 구분 없이 가장 중요한 라인 3개 (멜로디·베이스 보호)
-        let voices = allocate_voices_capped(notes, SOLO_VOICES);
-        return name_by_role(voices, bpm, char_limit, tempo_changes);
-    }
-
-    let voices = allocate_voices_by_instrument(notes, MAX_VOICES);
-
-    let distinct_instruments: std::collections::HashSet<u8> =
-        voices.iter().filter_map(|v| v.first().map(|n| n.program)).collect();
-
-    if distinct_instruments.len() > 1 {
-        name_by_instrument(voices, bpm, char_limit, tempo_changes)
-    } else {
-        name_by_role(voices, bpm, char_limit, tempo_changes)
+    match mode {
+        "duo" => {
+            // 2인: 4보이스, 마지막(최저음)을 베이스로 라벨
+            let voices = allocate_voices_capped(notes, DUO_VOICES);
+            name_by_role(voices, bpm, char_limit, tempo_changes, true)
+        }
+        "ensemble" => {
+            let voices = allocate_voices_by_instrument(notes, MAX_VOICES);
+            let distinct: std::collections::HashSet<u8> =
+                voices.iter().filter_map(|v| v.first().map(|n| n.program)).collect();
+            if distinct.len() > 1 {
+                name_by_instrument(voices, bpm, char_limit, tempo_changes)
+            } else {
+                name_by_role(voices, bpm, char_limit, tempo_changes, false)
+            }
+        }
+        _ => {
+            // solo
+            let voices = allocate_voices_capped(notes, SOLO_VOICES);
+            name_by_role(voices, bpm, char_limit, tempo_changes, false)
+        }
     }
 }
 
@@ -329,20 +336,25 @@ fn name_by_instrument(
     })
 }
 
-// 단일 악기: 음 높은 순으로 멜로디 + 화음1, 화음2 …
+// 음 높은 순으로 멜로디 + 화음1, 화음2 …
+// mark_bass=true 면 맨 마지막(최저음) 보이스를 "베이스"로 라벨 (2인 모드용)
 fn name_by_role(
     mut voices: Vec<Vec<Note>>,
     bpm: u32,
     char_limit: usize,
     tempo_changes: &[TempoChange],
+    mark_bass: bool,
 ) -> Vec<VoiceResult> {
-    // 평균 음높이 높은 순 (멜로디가 맨 앞)
+    // 평균 음높이 높은 순 (멜로디가 맨 앞, 베이스가 맨 뒤)
     voices.sort_by(|a, b| avg_pitch(b).cmp(&avg_pitch(a)));
 
+    let last = voices.len().saturating_sub(1);
     let mut chord_count = 0;
     build_voices_with_limit(voices, bpm, char_limit, tempo_changes, |idx, _| {
         if idx == 0 {
             "멜로디".to_string()
+        } else if mark_bass && idx == last {
+            "베이스".to_string()
         } else {
             chord_count += 1;
             format!("화음{}", chord_count)
