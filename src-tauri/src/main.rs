@@ -11,7 +11,7 @@ mod utils;
 
 use converter::{
     allocate_voices_by_instrument, allocate_voices_capped, extract_midi_notes, generate_mml_final,
-    max_polyphony, Note, TempoChange, GRID_SIZE, TPB,
+    max_polyphony, split_bass_line, Note, TempoChange, GRID_SIZE, TPB,
 };
 use utils::mml::gm_family_name;
 use std::collections::HashSet;
@@ -298,8 +298,10 @@ fn convert_voices(
 ) -> Vec<VoiceResult> {
     match mode {
         "duo" => {
-            // 2인: 4보이스, 마지막(최저음)을 베이스로 라벨
-            let voices = allocate_voices_capped(notes, DUO_VOICES);
+            // 2인: 베이스 라인을 따로 떼어 1보이스, 나머지(멜로디·화음)는 3보이스 → 역할 분리
+            let (bass, rest) = split_bass_line(notes);
+            let mut voices = allocate_voices_capped(rest, DUO_VOICES - 1);
+            voices.extend(allocate_voices_capped(bass, 1)); // 단음 베이스 라인
             name_by_role(voices, bpm, char_limit, tempo_changes, true)
         }
         "ensemble" => {

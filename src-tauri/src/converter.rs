@@ -401,6 +401,30 @@ fn avg_pitch(voice: &[Note]) -> u32 {
     voice.iter().map(|n| n.note as u32).sum::<u32>() / voice.len() as u32
 }
 
+/// 텍스처의 바닥음(베이스)을 멜로디·화음에서 분리한다 (2인 모드용).
+/// 어떤 음이 울리는 동안 그보다 높은 음은 있고 더 낮은 음은 없으면 = 그 화음의 바닥 = 베이스.
+/// (위/아래 아무것도 없는 단선율 멜로디 음은 베이스가 아니라 멜로디 쪽으로 간다.)
+/// 반환: (베이스 음들, 나머지 음들)
+pub fn split_bass_line(notes: Vec<Note>) -> (Vec<Note>, Vec<Note>) {
+    let mut bass = Vec::new();
+    let mut rest = Vec::new();
+    for n in &notes {
+        let sounding = |cmp: &dyn Fn(u8) -> bool| {
+            notes
+                .iter()
+                .any(|m| m.start <= n.start && m.end > n.start && cmp(m.note))
+        };
+        let has_higher = sounding(&|p| p > n.note);
+        let has_lower = sounding(&|p| p < n.note);
+        if has_higher && !has_lower {
+            bass.push(n.clone());
+        } else {
+            rest.push(n.clone());
+        }
+    }
+    (bass, rest)
+}
+
 // 구간 겹침 기준 최대 동시발음 수 (이 악기가 실제로 필요로 하는 보이스 수)
 pub fn max_polyphony(notes: &[Note]) -> usize {
     let mut events: Vec<(u32, i32)> = Vec::with_capacity(notes.len() * 2);
@@ -773,6 +797,26 @@ mod tests {
         assert!(programs.contains(&0), "피아노가 대표되어야 함");
         assert!(programs.contains(&24), "기타가 대표되어야 함");
         assert!(programs.contains(&73), "플룻이 대표되어야 함");
+    }
+
+    // 베이스 분리: 화음의 바닥음만 베이스로 가고, 단선율/상성부는 나머지로 간다.
+    #[test]
+    fn split_bass_line_separates_chord_bottom() {
+        let notes = vec![
+            // 동시 3음 화음 (48 바닥 / 60 중간 / 72 위)
+            note(48, 0, 384),
+            note(60, 0, 384),
+            note(72, 0, 384),
+            // 단선율 멜로디 음 (혼자 울림)
+            note(67, 384, 384),
+        ];
+        let (bass, rest) = split_bass_line(notes);
+        // 바닥음 48만 베이스
+        assert_eq!(bass.len(), 1, "베이스는 화음 바닥음 1개여야: {:?}", bass);
+        assert_eq!(bass[0].note, 48);
+        // 나머지(60, 72, 단선율 67)는 rest
+        assert!(rest.iter().any(|n| n.note == 67), "단선율 멜로디는 베이스가 아님");
+        assert_eq!(rest.len(), 3);
     }
 
     // 아주 낮은/높은 음이 섞여도 MML 옥타브가 유효 범위(O1~O8)를 벗어나면 안 된다.
