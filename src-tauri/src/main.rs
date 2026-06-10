@@ -348,7 +348,7 @@ fn name_by_role(
     mark_bass: bool,
 ) -> Vec<VoiceResult> {
     // 평균 음높이 높은 순 (멜로디가 맨 앞, 베이스가 맨 뒤)
-    voices.sort_by(|a, b| avg_pitch(b).cmp(&avg_pitch(a)));
+    voices.sort_by_key(|b| std::cmp::Reverse(avg_pitch(b)));
 
     let last = voices.len().saturating_sub(1);
     let mut chord_count = 0;

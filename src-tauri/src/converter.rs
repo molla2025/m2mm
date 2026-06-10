@@ -319,7 +319,7 @@ pub fn allocate_voices_capped(mut notes: Vec<Note>, max_voices: usize) -> Vec<Ve
         let mut target: Option<usize> = None;
         let mut best_gap = i32::MAX;
         for (i, lane) in lanes.iter().enumerate() {
-            let free = lane.last().map_or(true, |l| l.end <= n.start);
+            let free = lane.last().is_none_or(|l| l.end <= n.start);
             if free {
                 let gap = lane
                     .last()
@@ -378,18 +378,19 @@ pub fn allocate_voices_capped(mut notes: Vec<Note>, max_voices: usize) -> Vec<Ve
                 last.duration = n.start.saturating_sub(last.start);
             }
             lanes[i].push(n);
-        } else if (n.note > hi || n.note < lo) && repl_victim.is_some() {
+        } else if n.note > hi || n.note < lo {
             // 자를 게 없지만 새 음이 새 멜로디/베이스면 동시발음 내성부 하나를 교체
-            let i = repl_victim.unwrap();
-            lanes[i].pop();
-            lanes[i].push(n);
+            if let Some(i) = repl_victim {
+                lanes[i].pop();
+                lanes[i].push(n);
+            }
         }
         // 그 외(보호 대상만 울리거나 새 음이 내성부)면 새 음은 버린다.
     }
 
     // 빈 레인 제거 후 평균 음높이 내림차순 정렬(멜로디가 앞으로)
     let mut voices: Vec<Vec<Note>> = lanes.into_iter().filter(|l| !l.is_empty()).collect();
-    voices.sort_by(|a, b| avg_pitch(b).cmp(&avg_pitch(a)));
+    voices.sort_by_key(|b| std::cmp::Reverse(avg_pitch(b)));
     voices
 }
 
@@ -450,7 +451,7 @@ fn group_by_instrument(notes: Vec<Note>) -> Vec<Vec<Note>> {
     }
     let mut groups: Vec<Vec<Note>> = groups.into_values().collect();
     // 노트 수 많은 악기 = 중요도 높음
-    groups.sort_by(|a, b| b.len().cmp(&a.len()));
+    groups.sort_by_key(|b| std::cmp::Reverse(b.len()));
     groups
 }
 
