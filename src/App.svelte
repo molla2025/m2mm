@@ -487,6 +487,20 @@
           </div>
         {/if}
 
+        {#if !solo && result.voices.length > 1}
+          <!-- 합주 참여 순서 안내 -->
+          <div
+            class="flex items-start gap-2 rounded-2xl border border-info/40 bg-info/5 px-4 py-2.5 text-[11px] leading-relaxed text-base-content/70"
+          >
+            <span class="text-sm leading-none">🎻</span>
+            <span>
+              <span class="font-semibold text-info">{result.voices.length}명 합주용</span>
+              — 각자 단음 악기로 한 파트씩 맡아요. 아래 <b>번호 순서대로</b> 1번이 먼저 시작하고,
+              나머지가 차례로 합주에 참여하면 돼요.
+            </span>
+          </div>
+        {/if}
+
         <!-- 파트 카드 -->
         {#if result.voices.length > 0}
           <div class="min-h-0 flex-1 overflow-y-auto">
@@ -500,7 +514,15 @@
                     : style.card}"
                 >
                   <div class="flex items-center justify-between gap-2">
-                    <span class="badge {style.badge} badge-sm font-medium">{voice.name}</span>
+                    <div class="flex min-w-0 items-center gap-1.5">
+                      {#if !solo}
+                        <span
+                          class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-base-300 text-[10px] font-bold"
+                          title="합주 참여 순서">{idx + 1}</span
+                        >
+                      {/if}
+                      <span class="badge {style.badge} badge-sm font-medium">{voice.name}</span>
+                    </div>
                     <span class="text-[11px] text-base-content/40">{voice.note_count}음표</span>
                   </div>
 
