@@ -251,6 +251,10 @@
     return Math.max(1, voices - 2)
   }
 
+  // 연주 인원 규칙 상세 (툴팁)
+  const PLAY_RULE_TIP =
+    "곡을 처음 여는 사람만 1~3화음 악기를 골라 최대 3파트까지 맡을 수 있어요. 나중에 들어오는 사람은 모두 1화음(1파트)이에요.\n예) 6파트 → 시작자가 3화음으로 3파트 + 3명이 1파트씩 = 4명. 또는 6명이 1파트씩 = 6명. (전략 차이)"
+
   function fmtTime(seconds: number): string {
     const s = Math.floor(seconds)
     const m = Math.floor(s / 60)
@@ -413,12 +417,13 @@
                     >가 더 좋아요. (단독·2인도 되지만 일부는 빠져요.)
                   </p>
                 {/if}
-                <p class="text-base-content/55">
-                  ※ <span class="font-semibold text-warning">곡 여는 사람만</span> 1~3화음을 골라 최대 3파트까지
-                  맡아요 — 단독은 그 한 명이
-                  <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span> 악기로 전부 연주.
-                  나중에 <span class="font-semibold text-info">참여하는 사람</span>은 모두
-                  <span class="font-semibold text-info">1화음</span>(1파트)이에요.
+                <p class="flex items-center gap-1 text-base-content/55">
+                  ※ 곡 여는 사람만 <span class="font-semibold text-warning">1~3화음</span>, 나머지는
+                  <span class="font-semibold text-info">1화음</span>씩.
+                  <span
+                    class="tooltip tooltip-top cursor-help font-semibold text-base-content/40 before:max-w-[18rem] before:whitespace-pre-line before:text-left"
+                    data-tip={PLAY_RULE_TIP}>ⓘ</span
+                  >
                 </p>
               </div>
             </div>
@@ -483,10 +488,14 @@
               <span class="text-base-content/25">·</span>
               <span>동시음 {result.voices.length}개</span>
               <span class="text-base-content/25">·</span>
-              <span>
+              <span class="inline-flex items-center gap-1">
                 {minPlayers(result.voices.length) === 1
                   ? "혼자 연주"
                   : `최소 ${minPlayers(result.voices.length)}명`}
+                <span
+                  class="tooltip tooltip-bottom cursor-help text-base-content/35 before:max-w-[18rem] before:whitespace-pre-line before:text-left"
+                  data-tip={PLAY_RULE_TIP}>ⓘ</span
+                >
               </span>
               <span class="text-base-content/25">·</span>
               <span>러닝타임 {fmtTime(convDuration)}</span>
@@ -530,9 +539,9 @@
           >
             <span class="text-sm leading-none">🎹</span>
             <span>
-              <span class="font-semibold text-info">단독 연주</span>
-              — 곡 여는 사람이 <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span>으로
-              표시된 악기를 끼고 <b>혼자</b> 전부 연주해요.
+              <span class="font-semibold text-info">단독</span> —
+              <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span> 악기로
+              <b>혼자</b> 연주하세요.
             </span>
           </div>
         {:else if mode === "duo" && result.voices.length > 1}
@@ -542,10 +551,9 @@
           >
             <span class="text-sm leading-none">🎻</span>
             <span>
-              <span class="font-semibold text-info">2인용</span>
-              — 곡 여는 사람이 <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span>
-              악기로 <b>앞 3파트</b>를, 참여자 한 명이 <span class="font-semibold text-info">1화음</span> 악기로
-              <b>마지막 베이스</b>를 받쳐줘요. (2명)
+              <span class="font-semibold text-info">2인</span> — 시작자
+              <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span>(앞 3파트) +
+              참여자 <span class="font-semibold text-info">1화음</span>(베이스).
             </span>
           </div>
         {:else if mode === "ensemble" && result.voices.length > 1}
@@ -555,11 +563,9 @@
           >
             <span class="text-sm leading-none">🎻</span>
             <span>
-              <span class="font-semibold text-info">합주용 ({result.voices.length}파트)</span>
-              — 곡 여는 사람이 <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span>으로
-              <b>앞 3파트</b>를 맡으면 <b>최소 {minPlayers(result.voices.length)}명</b>, 나머지는 1명당 1파트(<span
-                class="font-semibold text-info">1화음</span
-              >)예요. 다 1개씩 나눠 맡아도 돼요 — 전략 차이! <b>번호 순서대로</b> 참여하면 됩니다.
+              <span class="font-semibold text-info">합주</span> — 시작자
+              <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span>이면 최소
+              <b>{minPlayers(result.voices.length)}명</b>, <b>번호 순서대로</b> 참여하세요.
             </span>
           </div>
         {/if}
