@@ -398,7 +398,7 @@ fn avg_pitch(voice: &[Note]) -> u32 {
 }
 
 // 구간 겹침 기준 최대 동시발음 수 (이 악기가 실제로 필요로 하는 보이스 수)
-fn max_polyphony(notes: &[Note]) -> usize {
+pub fn max_polyphony(notes: &[Note]) -> usize {
     let mut events: Vec<(u32, i32)> = Vec::with_capacity(notes.len() * 2);
     for n in notes {
         events.push((n.start, 1));

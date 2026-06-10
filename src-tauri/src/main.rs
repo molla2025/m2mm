@@ -11,9 +11,10 @@ mod utils;
 
 use converter::{
     allocate_voices_by_instrument, allocate_voices_capped, extract_midi_notes, generate_mml_final,
-    Note, TempoChange, GRID_SIZE, TPB,
+    max_polyphony, Note, TempoChange, GRID_SIZE, TPB,
 };
 use utils::mml::gm_family_name;
+use std::collections::HashSet;
 
 // 화음(합주) 모드 최대 보이스 수
 const MAX_VOICES: usize = 6;
@@ -57,6 +58,14 @@ struct ConversionResult {
     bpm: u32,
     total_notes: usize,
     original_duration: f64,
+}
+
+// 파일을 드롭했을 때 모드 추천에 쓰는 분석 결과
+#[derive(Debug, Serialize, Deserialize)]
+struct MidiAnalysis {
+    total_notes: usize,
+    instruments: usize,    // 비드럼 악기(program) 종류 수
+    max_polyphony: usize,  // 최대 동시발음 수
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -114,6 +123,18 @@ fn load_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
         serde_json::from_str(&json).map_err(|e| format!("Failed to parse settings: {}", e))?;
 
     Ok(settings)
+}
+
+// 변환 전에 파일을 분석해 모드 추천에 필요한 지표를 돌려준다.
+#[tauri::command]
+fn analyze_midi(midi_data: Vec<u8>) -> Result<MidiAnalysis, String> {
+    let (notes, _bpm, _tempo) = extract_midi_notes(&midi_data)?;
+    let instruments = notes.iter().map(|n| n.program).collect::<HashSet<u8>>().len();
+    Ok(MidiAnalysis {
+        total_notes: notes.len(),
+        instruments,
+        max_polyphony: max_polyphony(&notes),
+    })
 }
 
 #[tauri::command]
@@ -336,6 +357,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
+            analyze_midi,
             convert_midi,
             save_settings,
             load_settings

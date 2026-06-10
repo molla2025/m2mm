@@ -21,8 +21,17 @@
     original_duration: number
   }
 
+  interface MidiAnalysis {
+    total_notes: number
+    instruments: number
+    max_polyphony: number
+  }
+
   let isDragging = $state(false)
+  let isAnalyzing = $state(false)
   let isConverting = $state(false)
+  let analysis = $state<MidiAnalysis | null>(null)
+  let pendingBytes: number[] | null = null
   let result = $state<ConversionResult | null>(null)
   let fileName = $state("")
   let charLimit = $state(2400)
@@ -108,15 +117,39 @@
     }
 
     fileName = filePath.split(/[\\/]/).pop() || ""
-    await convertFile(filePath)
+    await analyzeFile(filePath)
   }
 
-  async function convertFile(filePath: string) {
-    isConverting = true
+  // 파일을 읽어 분석만 하고, 추천 화면을 띄운다 (아직 변환은 안 함)
+  async function analyzeFile(filePath: string) {
+    isAnalyzing = true
     errorMessage = ""
     result = null
+    analysis = null
 
-    // 변환 시작할 때 현재 설정 저장
+    try {
+      const fs = await import("@tauri-apps/plugin-fs")
+      const bytes = await fs.readFile(filePath)
+      pendingBytes = Array.from(bytes)
+
+      analysis = await invoke<MidiAnalysis>("analyze_midi", {
+        midiData: pendingBytes,
+      })
+    } catch (error: any) {
+      errorMessage = `분석 오류: ${error.toString()}`
+      pendingBytes = null
+    } finally {
+      isAnalyzing = false
+    }
+  }
+
+  // 선택한 모드로 실제 변환을 수행한다.
+  async function convertWithMode(soloMode: boolean) {
+    if (!pendingBytes) return
+    solo = soloMode
+    isConverting = true
+    errorMessage = ""
+
     try {
       await invoke("save_settings", { charLimit, solo })
     } catch (error) {
@@ -124,11 +157,8 @@
     }
 
     try {
-      const fs = await import("@tauri-apps/plugin-fs")
-      const bytes = await fs.readFile(filePath)
-
       const conversionResult = await invoke<ConversionResult>("convert_midi", {
-        midiData: Array.from(bytes),
+        midiData: pendingBytes,
         options: { char_limit: charLimit, solo },
       })
 
@@ -162,9 +192,53 @@
       copyTimerId = null
     }
     result = null
+    analysis = null
+    pendingBytes = null
     fileName = ""
     errorMessage = ""
     copiedIndex = -1
+  }
+
+  // 분석 결과로 추천 모드와 설명을 만든다.
+  function getRecommendation(a: MidiAnalysis): {
+    solo: boolean
+    title: string
+    detail: string
+    warn: string
+  } {
+    if (a.instruments >= 2) {
+      const warn =
+        a.instruments > 6
+          ? `악기가 ${a.instruments}종이나 돼서 6보이스에 다 못 담아요. 중요한 악기 위주로만 변환되고 일부는 빠집니다.`
+          : a.max_polyphony > 12
+            ? "화음이 매우 두꺼워서 변환 품질이 떨어질 수 있어요."
+            : ""
+      return {
+        solo: false,
+        title: "화음 (6보이스) 추천",
+        detail: `악기가 ${a.instruments}종이라 악기별로 나누는 화음 모드를 추천해요. 제대로 들으려면 최대 4명 합주가 필요해요 (1명이 3보이스, 나머지는 1명당 1보이스).`,
+        warn,
+      }
+    }
+    if (a.max_polyphony <= 3) {
+      return {
+        solo: true,
+        title: "단독 (3보이스) 추천",
+        detail: "악기 1종에 동시음도 3개 이하라, 혼자(3보이스)로도 거의 그대로 변환돼요.",
+        warn: "",
+      }
+    }
+    return {
+      solo: false,
+      title: "화음 (6보이스) 추천",
+      detail: `악기는 1종이지만 화음이 두꺼운 편(최대 동시 ${a.max_polyphony}음)이라, 6보이스가 더 꽉 차게 담겨요. 혼자 칠 거면 단독(3보이스)도 괜찮아요.`,
+      warn: "",
+    }
+  }
+
+  // 보이스 수 → 필요한 연주 인원 (1명이 최대 3보이스, 그 뒤로 1명당 1보이스)
+  function playersNeeded(voices: number): number {
+    return Math.max(1, voices - 2)
   }
 
   // 역할/악기군 → daisyUI 시맨틱 색상 (전체 클래스 문자열을 정적으로 보유해야 Tailwind가 생성함)
@@ -235,23 +309,23 @@
 
   <!-- Main content -->
   <main class="min-h-0 flex-1 overflow-hidden">
-    {#if !result}
-      <!-- ── 변환 전: 드롭존 중심 ── -->
+    {#if !result && !analysis}
+      <!-- ── 1단계: 드롭존 + 글자 수만 ── -->
       <div class="grid h-full place-items-center p-6">
         <div class="flex w-full max-w-md flex-col gap-4">
           <!-- 드롭존 -->
           <button
             type="button"
             onclick={handleFileSelect}
-            disabled={isConverting}
+            disabled={isAnalyzing}
             class="group flex flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed px-6 py-16 transition-all duration-200 hover:border-primary hover:bg-primary/5 {isDragging
               ? 'scale-[1.02] border-primary bg-primary/10 shadow-[0_0_40px_-8px_var(--color-primary)]'
               : 'border-base-300 bg-base-200/40'}"
           >
-            {#if isConverting}
+            {#if isAnalyzing}
               <span class="loading loading-spinner loading-lg text-primary"></span>
               <div class="text-center">
-                <p class="text-sm font-semibold">변환 중…</p>
+                <p class="text-sm font-semibold">분석 중…</p>
                 <p class="mt-0.5 text-xs text-base-content/45">{fileName}</p>
               </div>
             {:else}
@@ -273,42 +347,6 @@
               </div>
             {/if}
           </button>
-
-          <!-- 변환 모드 -->
-          <div class="rounded-2xl border border-base-300 bg-base-200/60 px-4 py-3">
-            <div class="mb-2 flex items-center gap-1.5">
-              <span class="text-xs font-medium text-base-content/70">변환 모드</span>
-              <span
-                class="tooltip tooltip-right text-base-content/35"
-                data-tip="단독: 혼자 연주용으로 가장 중요한 3개 라인만. 화음: 여러 사람/악기용으로 최대 6보이스."
-              >
-                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </span>
-            </div>
-            <div class="join w-full">
-              <button
-                type="button"
-                class="btn btn-sm join-item flex-1 {solo ? 'btn-primary' : 'btn-outline'}"
-                onclick={() => (solo = true)}
-              >
-                단독 <span class="opacity-60">3보이스</span>
-              </button>
-              <button
-                type="button"
-                class="btn btn-sm join-item flex-1 {!solo ? 'btn-primary' : 'btn-outline'}"
-                onclick={() => (solo = false)}
-              >
-                화음 <span class="opacity-60">6보이스</span>
-              </button>
-            </div>
-          </div>
 
           <!-- 글자 수 설정 -->
           <div class="rounded-2xl border border-base-300 bg-base-200/60 px-4 py-3">
@@ -345,6 +383,72 @@
           </p>
         </div>
       </div>
+    {:else if !result}
+      {@const rec = getRecommendation(analysis!)}
+      <!-- ── 2단계: 분석 결과 + 모드 추천 ── -->
+      <div class="grid h-full place-items-center p-6">
+        <div class="flex w-full max-w-md flex-col gap-4">
+          <div class="rounded-3xl border border-base-300 bg-base-200/50 p-5 shadow-xl">
+            <h2 class="truncate text-sm font-semibold">{fileName}</h2>
+            <div
+              class="mb-4 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-base-content/50"
+            >
+              <span>악기 {analysis!.instruments}종</span>
+              <span class="text-base-content/25">·</span>
+              <span>최대 동시 {analysis!.max_polyphony}음</span>
+              <span class="text-base-content/25">·</span>
+              <span>음표 {analysis!.total_notes.toLocaleString()}개</span>
+            </div>
+
+            <div class="rounded-2xl border border-primary/40 bg-primary/5 p-4">
+              <div class="flex items-center gap-2">
+                <span class="badge badge-primary badge-sm">추천</span>
+                <span class="text-sm font-semibold">{rec.title}</span>
+              </div>
+              <p class="mt-2 text-xs leading-relaxed text-base-content/65">{rec.detail}</p>
+            </div>
+
+            {#if rec.warn}
+              <div class="alert alert-warning mt-3 py-2 text-[11px]">
+                <span>{rec.warn}</span>
+              </div>
+            {/if}
+
+            <div class="mt-4 flex flex-col gap-2">
+              {#if isConverting}
+                <button class="btn btn-primary btn-block" disabled>
+                  <span class="loading loading-spinner loading-sm"></span> 변환 중…
+                </button>
+              {:else}
+                <button
+                  class="btn btn-primary btn-block"
+                  onclick={() => convertWithMode(rec.solo)}
+                >
+                  {rec.solo ? "단독(3보이스)" : "화음(6보이스)"}으로 변환
+                </button>
+                <button
+                  class="btn btn-outline btn-sm btn-block"
+                  onclick={() => convertWithMode(!rec.solo)}
+                >
+                  {rec.solo ? "화음(6보이스)" : "단독(3보이스)"}으로 변환
+                </button>
+              {/if}
+            </div>
+          </div>
+
+          {#if errorMessage}
+            <div class="alert alert-error py-2 text-xs"><span>{errorMessage}</span></div>
+          {/if}
+
+          <button
+            type="button"
+            class="text-center text-xs text-base-content/40 transition-colors hover:text-base-content/70"
+            onclick={reset}
+          >
+            ← 다른 파일 선택
+          </button>
+        </div>
+      </div>
     {:else}
       {@const convDuration = Math.max(...result.voices.map(v => v.duration), 0)}
       {@const truncated = Math.floor(result.original_duration) > Math.floor(convDuration)}
@@ -362,6 +466,8 @@
               <span>음표 {result.total_notes.toLocaleString()}개</span>
               <span class="text-base-content/25">·</span>
               <span>{result.voices.length}개 파트</span>
+              <span class="text-base-content/25">·</span>
+              <span>연주 {playersNeeded(result.voices.length)}명</span>
               <span class="text-base-content/25">·</span>
               <span>러닝타임 {fmtTime(convDuration)}</span>
             </div>
