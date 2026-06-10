@@ -40,6 +40,7 @@
   let copiedIndex = $state(-1)
   let copyTimerId: number | null = null
   let isUpdating = $state(false)
+  let showHelp = $state(false) // "연주 방법" 도움말 모달
 
   // 앱 시작 시 새 버전이 있으면 자동으로 내려받아 설치하고 재시작
   async function checkForUpdates() {
@@ -246,9 +247,6 @@
     return ROLE_STYLES.neutral
   }
 
-  // 연주 인원 규칙 — 고급 전략 (툴팁)
-  const PLAY_RULE_TIP =
-    "[고급] 곡을 여는 사람만 1~3화음 악기를 골라 한 번에 최대 3파트(같은 악기)까지 맡을 수 있어요. 같은 악기 파트가 여러 개면 그만큼 인원을 줄일 수 있어요.\n예) 6파트 → 시작자가 3화음으로 3파트 + 3명이 1파트씩 = 4명."
 
   function fmtTime(seconds: number): string {
     const s = Math.floor(seconds)
@@ -268,6 +266,78 @@
         <p class="text-sm font-semibold">새 버전 설치 중…</p>
         <p class="mt-1 text-xs text-base-content/45">설치가 끝나면 자동으로 다시 시작됩니다</p>
       </div>
+    </div>
+  {/if}
+
+  {#if showHelp}
+    <!-- 연주 방법 도움말 모달 -->
+    <div class="modal modal-open" role="dialog" aria-modal="true">
+      <div class="modal-box max-w-md border border-base-300 bg-base-200">
+        <h3 class="mb-3 text-base font-bold">🎵 연주 방법</h3>
+
+        <div class="space-y-4 text-xs leading-relaxed text-base-content/80">
+          <div>
+            <p class="mb-1 font-semibold text-base-content">모드별 기본</p>
+            <ul class="space-y-1 text-base-content/70">
+              <li>
+                🎹 <span class="font-semibold text-primary">단독</span> — <span
+                  class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span
+                > 악기로 혼자 (3파트)
+              </li>
+              <li>
+                🎻 <span class="font-semibold text-secondary">2인</span> — 시작자
+                <span class="font-semibold text-warning">3화음</span>(앞 3파트) + 참여자
+                <span class="font-semibold text-info">1화음</span>(베이스)
+              </li>
+              <li>
+                🎶 <span class="font-semibold text-info">합주</span> — 사람마다
+                <span class="font-semibold text-info">1화음</span> 악기로 한 파트씩
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <p class="mb-1 font-semibold text-base-content">규칙</p>
+            <ul class="list-disc space-y-1 pl-4 text-base-content/70">
+              <li>
+                곡을 처음 <b>여는 사람(시작자)</b>만 1·2·3화음 악기를 골라 한 번에 그 수만큼 파트를 맡을 수
+                있어요.
+              </li>
+              <li>
+                <b>나중에 들어오는 사람</b>은 어떤 악기를 들었든 항상 <b>1파트(1화음)</b>만 맡습니다.
+              </li>
+              <li>
+                시작자가 여러 파트를 한 번에 치려면 그 파트들이 <b>같은 악기</b>여야 해요. (3화음
+                피아노로 피아노 3줄 ✓ / 피아노+트럼펫 ✗)
+              </li>
+            </ul>
+          </div>
+
+          <div class="rounded-xl border border-accent/30 bg-accent/5 p-3">
+            <p class="mb-1 font-semibold text-accent">고급 — 인원 줄이기</p>
+            <p class="text-base-content/70">
+              같은 악기 파트가 여러 개면 시작자가 묶어서 인원을 줄일 수 있어요.
+            </p>
+            <p class="mt-2 text-[11px] text-base-content/60">
+              예) 피아노 3 + 금관 2 + 현악 1 (총 6파트)<br />
+              → 시작자가 <span class="font-semibold text-warning">3화음 피아노</span>로 피아노 3줄(1명) +
+              금관·현악 3명 = <b class="text-accent">4명</b> (전략에 따라 최대 6명)
+            </p>
+          </div>
+        </div>
+
+        <div class="modal-action mt-4">
+          <button type="button" class="btn btn-sm btn-primary" onclick={() => (showHelp = false)}>
+            알겠어요
+          </button>
+        </div>
+      </div>
+      <button
+        type="button"
+        class="modal-backdrop"
+        aria-label="닫기"
+        onclick={() => (showHelp = false)}
+      ></button>
     </div>
   {/if}
 
@@ -415,9 +485,10 @@
                 <p class="flex items-center gap-1 text-base-content/55">
                   ※ 단독은 <span class="rounded bg-warning/15 px-1 font-bold text-warning">3화음</span>
                   악기로 혼자, 합주는 각자 <span class="font-semibold text-info">1화음</span> 악기로!
-                  <span
-                    class="tooltip tooltip-top cursor-help font-semibold text-base-content/40 before:max-w-[18rem] before:whitespace-pre-line before:text-left"
-                    data-tip={PLAY_RULE_TIP}>ⓘ</span
+                  <button
+                    type="button"
+                    class="font-medium text-info underline-offset-2 hover:underline"
+                    onclick={() => (showHelp = true)}>ⓘ 연주 방법</button
                   >
                 </p>
               </div>
@@ -485,9 +556,11 @@
               <span class="text-base-content/25">·</span>
               <span class="inline-flex items-center gap-1">
                 {mode === "solo" ? "혼자 연주" : mode === "duo" ? "2명" : `${result.voices.length}명`}
-                <span
-                  class="tooltip tooltip-bottom cursor-help text-base-content/35 before:max-w-[18rem] before:whitespace-pre-line before:text-left"
-                  data-tip={PLAY_RULE_TIP}>ⓘ</span
+                <button
+                  type="button"
+                  class="text-base-content/40 hover:text-info"
+                  aria-label="연주 방법"
+                  onclick={() => (showHelp = true)}>ⓘ</button
                 >
               </span>
               <span class="text-base-content/25">·</span>
