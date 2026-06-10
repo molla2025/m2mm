@@ -1,0 +1,107 @@
+@import "tailwindcss";
+/* 기본 내장 테마는 제외하고 아래 커스텀 m2mm 테마만 사용 */
+@plugin "daisyui" {
+  themes: false;
+}
+
+/* ─── 커스텀 테마: m2mm (MIDI→MML 컨버터용 다크 스튜디오 톤) ─── */
+@plugin "daisyui/theme" {
+  name: "m2mm";
+  default: true;
+  prefersdark: true;
+  color-scheme: dark;
+
+  /* 배경/표면 — 깊은 네이비-슬레이트 */
+  --color-base-100: oklch(20% 0.025 264);
+  --color-base-200: oklch(24% 0.028 264);
+  --color-base-300: oklch(29% 0.032 264);
+  --color-base-content: oklch(93% 0.015 264);
+
+  /* primary — 시그니처 인디고/스카이 (멜로디) */
+  --color-primary: oklch(68% 0.17 258);
+  --color-primary-content: oklch(98% 0.01 258);
+
+  /* secondary — 바이올렛 (화음) */
+  --color-secondary: oklch(70% 0.16 305);
+  --color-secondary-content: oklch(98% 0.01 305);
+
+  /* accent — 시안 (강조/포인트) */
+  --color-accent: oklch(78% 0.13 196);
+  --color-accent-content: oklch(22% 0.04 196);
+
+  --color-neutral: oklch(28% 0.025 264);
+  --color-neutral-content: oklch(92% 0.012 264);
+
+  --color-info: oklch(72% 0.14 233);
+  --color-info-content: oklch(98% 0.01 233);
+  --color-success: oklch(76% 0.16 153);
+  --color-success-content: oklch(20% 0.04 153);
+  --color-warning: oklch(83% 0.16 84);
+  --color-warning-content: oklch(24% 0.05 84);
+  --color-error: oklch(68% 0.2 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  /* 라운드/형태 */
+  --radius-selector: 1rem;
+  --radius-field: 0.625rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* ─── 글로벌 베이스 ─── */
+html,
+body,
+#app {
+  height: 100vh;
+  margin: 0;
+}
+
+#app {
+  overflow: hidden;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 숫자 인풋의 위아래 화살표(스피너) 제거 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* MML 코드 표시용 모노스페이스 */
+.mml-content {
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+/* 테마에 맞춘 스크롤바 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-base-300);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-neutral);
+}
