@@ -272,10 +272,12 @@
   {#if showHelp}
     <!-- 연주 방법 도움말 모달 -->
     <div class="modal modal-open" role="dialog" aria-modal="true">
-      <div class="modal-box max-w-lg border border-base-300 bg-base-200">
-        <h3 class="mb-3 text-base font-bold">🎵 연주 방법 (상세)</h3>
+      <div
+        class="modal-box flex max-h-[70vh] max-w-lg flex-col overflow-hidden border border-base-300 bg-base-200"
+      >
+        <h3 class="mb-3 shrink-0 text-base font-bold">🎵 연주 방법 (상세)</h3>
 
-        <div class="space-y-4 text-xs leading-relaxed text-base-content/80">
+        <div class="flex-1 space-y-4 overflow-y-auto pr-1 text-xs leading-relaxed text-base-content/80">
           <div>
             <p class="mb-1 font-semibold text-base-content">① 동시음 = 여러 단음을 겹치기</p>
             <p class="text-base-content/70">
@@ -350,7 +352,7 @@
           </div>
         </div>
 
-        <div class="modal-action mt-4">
+        <div class="modal-action mt-3 shrink-0 border-t border-base-300 pt-3">
           <button type="button" class="btn btn-sm btn-primary" onclick={() => (showHelp = false)}>
             알겠어요
           </button>
