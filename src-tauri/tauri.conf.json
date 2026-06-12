@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "딸깍악보",
+  "productName": "Ddalkkak-Akbo",
   "version": "0.1.0",
   "identifier": "com.mobinogi.mmlconverter",
-  "mainBinaryName": "ttalkkak-akbo",
+  "mainBinaryName": "ddalkkak-akbo",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
