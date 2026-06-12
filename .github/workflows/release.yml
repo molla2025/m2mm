@@ -46,7 +46,20 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "m2mm ${{ github.ref_name }}"
+          releaseName: "딸깍악보 ${{ github.ref_name }}"
           releaseBody: "MIDI를 마비노기 모바일 MML로 변환하는 앱입니다. 아래 설치 파일을 받아 설치하세요. (설치 후에는 새 버전이 나오면 앱이 켜질 때 자동으로 업데이트됩니다.)"
           releaseDraft: false
           prerelease: false
+
+      - name: .sig 자산 제거 (자동업데이트는 latest.json이 서명을 담고 있어 단독 .sig 불필요)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $assets = gh release view ${{ github.ref_name }} --json assets --jq '.assets[].name'
+          foreach ($a in $assets) {
+            if ($a -match '\.sig$') {
+              Write-Host "deleting asset: $a"
+              gh release delete-asset ${{ github.ref_name }} $a --yes
+            }
+          }
