@@ -383,8 +383,8 @@
         🎵
       </div>
       <div>
-        <h1 class="text-sm font-bold leading-tight">M2MM</h1>
-        <p class="text-[11px] text-base-content/45">MIDI → 모비노기 MML 변환기</p>
+        <h1 class="text-sm font-bold leading-tight">딸깍악보</h1>
+        <p class="text-[11px] text-base-content/45">누구나 1분이면 OK · MIDI → 모비노기 MML</p>
       </div>
     </div>
     <span class="badge badge-outline badge-sm text-base-content/50">v0.1.0</span>

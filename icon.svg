@@ -1,0 +1,36 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="0.55" stop-color="#7c5cf0"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="22" flood-color="#1e1b4b" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- rounded background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="232" fill="url(#bg)"/>
+
+  <!-- eighth note -->
+  <g fill="#ffffff" filter="url(#soft)">
+    <!-- note head -->
+    <ellipse cx="392" cy="708" rx="124" ry="96" transform="rotate(-22 392 708)"/>
+    <!-- stem -->
+    <rect x="497" y="286" width="42" height="430" rx="8"/>
+    <!-- flag -->
+    <path d="M539 290
+             C 690 312 770 392 742 520
+             C 760 404 660 356 539 372 Z"/>
+  </g>
+
+  <!-- 딸깍 click sparkle -->
+  <g fill="#22d3ee">
+    <path d="M742 232
+             c 18 56 28 66 84 84
+             c -56 18 -66 28 -84 84
+             c -18 -56 -28 -66 -84 -84
+             c 56 -18 66 -28 84 -84 Z"/>
+  </g>
+</svg>

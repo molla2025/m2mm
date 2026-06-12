@@ -1,8 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "m2mm",
+  "productName": "딸깍악보",
   "version": "0.1.0",
   "identifier": "com.mobinogi.mmlconverter",
+  "mainBinaryName": "ttalkkak-akbo",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
@@ -12,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "m2mm",
+        "title": "딸깍악보",
         "width": 1000,
         "height": 700,
         "minWidth": 350,

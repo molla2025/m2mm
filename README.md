@@ -1,12 +1,12 @@
-# 🎵 m2mm (MIDI to Mabinogi Mobile MML)
+# 🎵 딸깍악보 — 누구나 1분이면 OK
 
-MIDI 파일을 **마비노기 모바일 MML** 형식으로 변환하는 Windows 프로그램입니다.
+**MIDI 파일을 딸깍 한 번으로 마비노기 모바일 MML 악보로** 만들어주는 Windows 프로그램입니다.
 
 ## 📥 다운로드
 
 **[➡️ 최신 버전 다운로드 (GitHub Releases)](https://github.com/molla2025/m2mm/releases/latest)**
 
-- `m2mm_..._x64-setup.exe`를 받아 실행하면 설치됩니다.
+- `딸깍악보_..._x64-setup.exe`를 받아 실행하면 설치됩니다.
 - Windows 10/11 (64-bit) 지원
 - **관리자 권한 불필요** — 사용자 단위로 설치돼 UAC 창이 뜨지 않아요.
 - **자동 업데이트** — 새 버전이 나오면 앱 실행 시 알아서 받아 설치합니다.
@@ -100,4 +100,4 @@ A: 원본 MIDI 파일 품질을 먼저 확인해 주세요. 원본에 이상이 
 
 ---
 
-**Made with ❤️ for Mabinogi Mobile**
+**딸깍악보 · Made with ❤️ for Mabinogi Mobile**
