@@ -79,10 +79,8 @@ fn find_tie_combination(
     lengths.sort_by(|a, b| b.cmp(a));
 
     for length_ticks in lengths {
-        if let Some(max) = max_ties {
-            if tie_count >= max {
-                break;
-            }
+        if let Some(max) = max_ties && tie_count >= max {
+            break;
         }
 
         while remaining >= length_ticks {
@@ -91,10 +89,8 @@ fn find_tie_combination(
                 remaining -= length_ticks;
                 tie_count += 1;
 
-                if let Some(max) = max_ties {
-                    if tie_count >= max {
-                        break;
-                    }
+                if let Some(max) = max_ties && tie_count >= max {
+                    break;
                 }
             } else {
                 break;
