@@ -445,7 +445,7 @@
         <p class="text-[11px] text-base-content/45">누구나 1분이면 OK · MIDI → 모비노기 MML</p>
       </div>
     </div>
-    <span class="badge badge-outline badge-sm text-base-content/50">v0.1.1</span>
+    <span class="badge badge-outline badge-sm text-base-content/50">v0.1.0</span>
   </header>
 
   <!-- Main content -->
