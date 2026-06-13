@@ -187,7 +187,8 @@ pub fn extract_midi_notes(midi_data: &[u8]) -> Result<(Vec<Note>, u32, Vec<Tempo
         for event in track {
             tick += event.delta.as_int();
             if let midly::TrackEventKind::Meta(midly::MetaMessage::Tempo(tempo)) = event.kind {
-                let bpm = (60_000_000.0 / tempo.as_int() as f64).round() as u32;
+                // 마비노기/원본 MML의 T 범위(32~255)로 클램프. (비정상 0값 등도 안전 처리)
+                let bpm = ((60_000_000.0 / tempo.as_int() as f64).round() as u32).clamp(32, 255);
                 tempo_changes.push((tick, bpm));
             }
         }
