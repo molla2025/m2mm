@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte"
+  import { fade } from "svelte/transition"
   import { invoke } from "@tauri-apps/api/core"
   import { getCurrentWindow } from "@tauri-apps/api/window"
   import { open } from "@tauri-apps/plugin-dialog"
@@ -43,6 +44,9 @@
   let copyTimerId: number | null = null
   let isUpdating = $state(false)
   let showHelp = $state(false) // "연주 방법" 도움말 모달
+  let showSplash = $state(true) // 시작 스플래시 화면
+  const MIN_SPLASH_MS = 1600 // 너무 빨리 사라지지 않도록 최소 표시 시간
+  const splashStart = Date.now()
 
   // 앱 시작 시 새 버전이 있으면 자동으로 내려받아 설치하고 재시작
   async function checkForUpdates() {
@@ -62,6 +66,12 @@
   }
 
   onMount(async () => {
+    const appWindow = getCurrentWindow()
+    // onMount 시점엔 스플래시 DOM이 이미 준비됨 → 바로 창을 띄운다.
+    // (rAF는 창이 hidden이면 호출 안 될 수 있어 직접 show; 흰 화면은 스플래시가 덮어서 안 보임)
+    appWindow.show()
+    appWindow.setFocus()
+
     // 새 버전 자동 업데이트 (백그라운드, UI를 막지 않음)
     checkForUpdates()
 
@@ -76,8 +86,11 @@
       console.error("Failed to load settings:", error)
     }
 
+    // 준비 완료 + 최소 표시 시간 보장 후 스플래시를 서서히 닫는다
+    const elapsed = Date.now() - splashStart
+    setTimeout(() => (showSplash = false), Math.max(0, MIN_SPLASH_MS - elapsed))
+
     // Drag & Drop 이벤트
-    const appWindow = getCurrentWindow()
     appWindow.onDragDropEvent(event => {
       if (event.payload.type === "drop") {
         isDragging = false
@@ -258,6 +271,51 @@
 </script>
 
 <div class="flex h-screen flex-col bg-base-100 text-base-content overflow-hidden">
+  {#if showSplash}
+    <!-- 시작 스플래시: 창은 이미 이게 그려진 채로 등장하고, 준비되면 서서히 사라짐 -->
+    <div
+      class="absolute inset-0 z-[60] flex flex-col items-center justify-center gap-6 bg-base-100"
+      out:fade={{ duration: 480 }}
+    >
+      <div class="splash-logo">
+        <svg width="108" height="108" viewBox="0 0 1024 1024" aria-hidden="true">
+          <defs>
+            <linearGradient id="splashGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#6366f1" />
+              <stop offset="0.55" stop-color="#7c5cf0" />
+              <stop offset="1" stop-color="#8b5cf6" />
+            </linearGradient>
+          </defs>
+          <rect width="1024" height="1024" rx="232" fill="url(#splashGrad)" />
+          <g fill="#ffffff">
+            <ellipse cx="392" cy="708" rx="124" ry="96" transform="rotate(-22 392 708)" />
+            <rect x="497" y="286" width="42" height="430" rx="8" />
+            <path d="M539 290 C 690 312 770 392 742 520 C 760 404 660 356 539 372 Z" />
+          </g>
+          <path
+            fill="#22d3ee"
+            d="M742 232 c 18 56 28 66 84 84 c -56 18 -66 28 -84 84 c -18 -56 -28 -66 -84 -84 c 56 -18 66 -28 84 -84 Z"
+          />
+        </svg>
+      </div>
+
+      <div class="text-center">
+        <h1
+          class="bg-gradient-to-r from-primary to-secondary bg-clip-text text-3xl font-extrabold tracking-tight text-transparent"
+        >
+          딸깍악보
+        </h1>
+        <p class="mt-1.5 text-xs text-base-content/45">1분이면 누구나 뚝딱</p>
+      </div>
+
+      <div class="mt-1 h-[3px] w-40 overflow-hidden rounded-full bg-base-content/10">
+        <div
+          class="splash-bar h-full w-2/5 rounded-full bg-gradient-to-r from-primary to-secondary"
+        ></div>
+      </div>
+    </div>
+  {/if}
+
   {#if isUpdating}
     <!-- 자동 업데이트 설치 중 오버레이 -->
     <div
@@ -718,3 +776,39 @@
     {/if}
   </main>
 </div>
+
+<style>
+  /* 스플래시 로고: 은은하게 두둥실 + 부드러운 글로우 */
+  .splash-logo {
+    animation: splash-float 3s ease-in-out infinite;
+    filter: drop-shadow(0 10px 26px rgba(124, 92, 240, 0.45));
+  }
+  @keyframes splash-float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-7px);
+    }
+  }
+  /* 로딩 바: 그라데이션 막대가 좌우로 흐르는 인디케이터 */
+  .splash-bar {
+    animation: splash-slide 1.15s ease-in-out infinite;
+  }
+  @keyframes splash-slide {
+    0% {
+      transform: translateX(-110%);
+    }
+    100% {
+      transform: translateX(360%);
+    }
+  }
+  /* 움직임 줄이기 설정 존중 */
+  @media (prefers-reduced-motion: reduce) {
+    .splash-logo,
+    .splash-bar {
+      animation: none;
+    }
+  }
+</style>
