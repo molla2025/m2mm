@@ -369,6 +369,14 @@ fn name_by_role(
 
 fn main() {
     tauri::Builder::default()
+        // 앱은 하나만 실행. 또 실행하면 기존 창을 앞으로 가져온다. (반드시 첫 플러그인)
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
