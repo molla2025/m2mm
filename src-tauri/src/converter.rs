@@ -549,6 +549,36 @@ fn push_note(
     emitted
 }
 
+// 한 음만 잠깐 옥타브를 넘었다 돌아오는 패턴을 줄인다 (마비노기 지원: B+=윗옥타브 도, C-=아랫옥타브 시).
+//   >C< → B+,  <B> → C-   (길이/점 표기는 보존: >C16< → B+16)
+// 노트명이 정확히 C/B 일 때만(샵 C+ 등은 길이 문자가 아니므로 자동 제외) 매칭하므로 안전하다.
+fn optimize_octave_bounces(s: &str) -> String {
+    fn replace_bounce(s: &str, open: u8, note: u8, close: u8, repl: &str) -> String {
+        let b = s.as_bytes();
+        let mut out = String::with_capacity(s.len());
+        let mut i = 0;
+        while i < b.len() {
+            if b[i] == open && i + 1 < b.len() && b[i + 1] == note {
+                let mut j = i + 2;
+                while j < b.len() && (b[j].is_ascii_digit() || b[j] == b'.') {
+                    j += 1;
+                }
+                if j < b.len() && b[j] == close {
+                    out.push_str(repl);
+                    out.push_str(&s[i + 2..j]); // 길이/점 보존
+                    i = j + 1; // 닫는 기호까지 소비
+                    continue;
+                }
+            }
+            out.push(b[i] as char);
+            i += 1;
+        }
+        out
+    }
+    let up = replace_bounce(s, b'>', b'C', b'<', "B+");
+    replace_bounce(&up, b'<', b'B', b'>', "C-")
+}
+
 pub fn generate_mml_final(voice_notes: &[Note], bpm: u32, start_octave: i32, tempo_changes: &[TempoChange]) -> String {
     if voice_notes.is_empty() {
         return String::new();
@@ -620,8 +650,13 @@ pub fn generate_mml_final(voice_notes: &[Note], bpm: u32, start_octave: i32, tem
         // 3) 옥타브 명령 (MML 유효 범위로 클램프 — O0/음수/O9 같은 잘못된 토큰 방지)
         let (note_name, raw_octave) = midi_to_note_name(note.note);
         let octave = raw_octave.clamp(MML_OCTAVE_MIN, MML_OCTAVE_MAX);
+        // 옥타브 변경: ±1은 상대 명령(>,<)으로 1자 절약, 그 외엔 절대값 O{n}
         if octave != current_octave {
-            mml.push(format!("O{}", octave));
+            match octave - current_octave {
+                1 => mml.push(">".to_string()),
+                -1 => mml.push("<".to_string()),
+                _ => mml.push(format!("O{}", octave)),
+            }
             current_octave = octave;
         }
 
@@ -666,7 +701,7 @@ pub fn generate_mml_final(voice_notes: &[Note], bpm: u32, start_octave: i32, tem
         }
     }
 
-    mml.join("")
+    optimize_octave_bounces(&mml.join(""))
 }
 
 #[cfg(test)]
@@ -689,6 +724,27 @@ mod tests {
             program,
             ..note(num, start, duration)
         }
+    }
+
+    // 옥타브 한 음 바운스 축약: >C< → B+, <B> → C- (길이 보존, 비대상은 그대로)
+    #[test]
+    fn octave_bounce_optimizations() {
+        assert_eq!(optimize_octave_bounces("C>C<C"), "CB+C");
+        assert_eq!(optimize_octave_bounces("C<B>C"), "CC-C");
+        assert_eq!(optimize_octave_bounces(">C16<"), "B+16");
+        assert_eq!(optimize_octave_bounces(">C<D"), "B+D");
+        assert_eq!(optimize_octave_bounces(">C>C"), ">C>C"); // 안 돌아오면 그대로
+        assert_eq!(optimize_octave_bounces(">C+<"), ">C+<"); // 샵(C+)은 변환 안 함
+    }
+
+    // 생성 단계: ±1 옥타브 이동은 >/< 로, 잠깐 갔다 오면 B+ 로 줄어야 한다.
+    #[test]
+    fn relative_octave_in_generation() {
+        let notes = vec![note(60, 0, 384), note(72, 384, 384), note(60, 768, 384)]; // C4→C5→C4
+        let tempos = vec![TempoChange { tick: 0, bpm: 120 }];
+        let mml = generate_mml_final(&notes, 120, 4, &tempos);
+        assert!(mml.contains("B+"), "위 바운스가 B+로 안 줄음: {mml}");
+        assert!(!mml.contains("O5"), "절대 옥타브 O5가 남음(상대화 실패): {mml}");
     }
 
     // 노트 길이 한가운데에 걸리는 템포 변경이 누락되지 않고, 타이로 분할되어 삽입되어야 한다.
