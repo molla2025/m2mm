@@ -255,10 +255,10 @@
     // 여러 악기: 악기군 라벨
     if (name.includes("피아노")) return ROLE_STYLES.primary
     if (name.includes("현악")) return ROLE_STYLES.secondary
-    if (name.includes("금관") || name.includes("리드")) return ROLE_STYLES.warning
-    if (name.includes("기타")) return ROLE_STYLES.error
-    if (name.includes("파이프") || name.includes("오르간")) return ROLE_STYLES.accent
-    if (name.includes("신스") || name.includes("앙상블")) return ROLE_STYLES.info
+    if (name.includes("트럼펫") || name.includes("색소폰")) return ROLE_STYLES.warning
+    if (name.includes("통기타")) return ROLE_STYLES.error
+    if (name.includes("플루트") || name.includes("오르간")) return ROLE_STYLES.accent
+    if (name.includes("신스")) return ROLE_STYLES.info
     return ROLE_STYLES.neutral
   }
 
