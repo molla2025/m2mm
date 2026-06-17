@@ -436,40 +436,47 @@ pub fn max_polyphony(notes: &[Note]) -> usize {
     max as usize
 }
 
-// 악기(program)별로 그룹화하고 노트 수(중요도) 내림차순 정렬
-fn group_by_instrument(notes: Vec<Note>) -> Vec<Vec<Note>> {
+// 악기군(family = program/8, 현악·피아노·금관…)별로 그룹화하고 노트 수(중요도) 내림차순 정렬.
+// 같은 음색(예: 바이올린·비올라·첼로 = 모두 현악)을 한 덩어리로 묶어 그룹 수를 줄인다.
+// 악기(program) 단위로 잘게 쪼개 상위 N개만 남기던 방식보다 그룹이 적어지므로,
+// 노트 수가 적어 단독이면 잘려나갈 보조 악기(인트로 패드 등)도 살아남을 여지가 생긴다
+// → 곡 앞부분이 통째로 묵음 되던 문제를 줄인다.
+fn group_by_family(notes: Vec<Note>) -> Vec<Vec<Note>> {
     let mut groups: HashMap<u8, Vec<Note>> = HashMap::new();
     for n in notes {
-        groups.entry(n.program).or_default().push(n);
+        groups.entry(n.program / 8).or_default().push(n);
     }
     let mut groups: Vec<Vec<Note>> = groups.into_values().collect();
-    // 노트 수 많은 악기 = 중요도 높음
+    // 노트 수 많은 음색군 = 중요도 높음
     groups.sort_by_key(|b| std::cmp::Reverse(b.len()));
     groups
 }
 
-/// 악기 인지 보이스 분배 (총 max_voices 예산).
-/// - 악기가 하나면 전 예산을 그 악기에 (단음 악기면 1보이스만 나옴).
-/// - 여러 악기면 악기당 최대 PER_INSTRUMENT_CAP(3)까지, 중요도(노트 수) 순으로
-///   레벨별로 한 보이스씩 돌아가며 채운다 → 중요한 악기가 더 받되 최대한 많은 악기를 대표.
+/// 악기군 인지 보이스 분배 (총 max_voices 예산).
+/// - 음색군이 하나면 전 예산을 그 군에 (단음이면 1보이스만 나옴).
+/// - 여러 군이면 군당 최대 PER_FAMILY_CAP(3)까지, 중요도(노트 수) 순으로
+///   레벨별로 한 보이스씩 돌아가며 채운다 → 중요한 음색이 더 받되 최대한 많은 음색을 대표.
+/// - 끝으로, 악기가 적은 구간(인트로 등)에 놀고 있는 보이스의 빈틈에 아직 안 담긴 음을
+///   흡수시킨다(gap-fill) → 보이스가 놀아서 곡 앞부분이 짤리던 문제 해결, 음색 구분은 유지.
 pub fn allocate_voices_by_instrument(notes: Vec<Note>, max_voices: usize) -> Vec<Vec<Note>> {
     if max_voices == 0 || notes.is_empty() {
         return Vec::new();
     }
 
-    let groups = group_by_instrument(notes);
+    let all = notes.clone();
+    let groups = group_by_family(notes);
 
-    // 악기 1개 → 전 예산을 그 악기에
+    // 음색군 1개 → 전 예산을 그 군에 (전 보이스가 한 음색이라 노는 보이스 없음 → gap-fill 불필요)
     if groups.len() <= 1 {
         let only = groups.into_iter().next().unwrap_or_default();
         return allocate_voices_capped(only, max_voices);
     }
 
-    // 여러 악기: 악기당 min(실제 동시발음, 3)까지, 중요도순 레벨별 분배
-    const PER_INSTRUMENT_CAP: usize = 3;
+    // 여러 음색군: 군당 min(실제 동시발음, 3)까지, 중요도순 레벨별 분배
+    const PER_FAMILY_CAP: usize = 3;
     let caps: Vec<usize> = groups
         .iter()
-        .map(|g| max_polyphony(g).min(PER_INSTRUMENT_CAP))
+        .map(|g| max_polyphony(g).min(PER_FAMILY_CAP))
         .collect();
     let mut alloc = vec![0usize; groups.len()];
     let mut remaining = max_voices;
@@ -498,7 +505,80 @@ pub fn allocate_voices_by_instrument(notes: Vec<Note>, max_voices: usize) -> Vec
             voices.extend(allocate_voices_capped(group, a));
         }
     }
+
+    // 아직 어느 보이스에도 안 담긴 음(드롭/씹힌 음)을, 그 시각에 비어있는 보이스 빈틈에 흡수.
+    // capped 가 음을 자를 때 start/note/program 은 그대로라 이 키로 "담긴 음"을 식별한다.
+    let placed: std::collections::HashSet<(u32, u8, u8)> = voices
+        .iter()
+        .flatten()
+        .map(|n| (n.start, n.note, n.program))
+        .collect();
+    let leftover: Vec<Note> = all
+        .into_iter()
+        .filter(|n| !placed.contains(&(n.start, n.note, n.program)))
+        .collect();
+    fill_idle_gaps(&mut voices, leftover);
+
     voices
+}
+
+// 아직 안 담긴 음들을, 그 음의 (start,end) 구간이 통째로 비어있는 보이스에 끼워넣는다.
+// 같은 음색 보이스를 우선하고, 다른 음색은 그 보이스의 정체성(다수결 음색)을 깨지 않는 선에서만
+// 받는다 → 악기 적은 구간(인트로 등)에 놀던 보이스를 활용하되, 6개 음색 구분은 유지.
+// 보이스 수는 늘리지 않는다(빈틈만 채움).
+fn fill_idle_gaps(voices: &mut [Vec<Note>], leftover: Vec<Note>) {
+    if voices.is_empty() || leftover.is_empty() {
+        return;
+    }
+
+    // 1차 배분 직후 각 보이스는 단일 음색 → 대표 음색과 그 크기를 기록.
+    // 다른 음색 음은 이 크기를 넘지 않는 선까지만 받아 대표 음색이 항상 다수가 되게 한다.
+    let voice_fam: Vec<u8> = voices
+        .iter()
+        .map(|v| v.first().map(|n| n.program / 8).unwrap_or(0))
+        .collect();
+    let primary_count: Vec<usize> = voices.iter().map(|v| v.len()).collect();
+    let mut cross_added = vec![0usize; voices.len()];
+
+    let mut left = leftover;
+    // 시작 빠른 순, 동시면 높은 음 우선
+    left.sort_by(|a, b| a.start.cmp(&b.start).then(b.note.cmp(&a.note)));
+
+    for n in left {
+        let nf = n.program / 8;
+        let mut best: Option<usize> = None;
+        let mut best_key = (u8::MAX, i32::MAX);
+        for (i, v) in voices.iter().enumerate() {
+            // n 의 구간이 이 보이스의 빈틈에 통째로 들어가는가(겹침 없음)
+            let free = v.iter().all(|m| m.end <= n.start || m.start >= n.end);
+            if !free {
+                continue;
+            }
+            let cross = nf != voice_fam[i];
+            // 다른 음색은 대표 음색이 다수로 남는 선까지만 (정체성 보호)
+            if cross && cross_added[i] + 1 >= primary_count[i] {
+                continue;
+            }
+            // 이웃 음과의 음높이 차(빈 보이스면 0)
+            let pitch_gap = v
+                .iter()
+                .map(|m| (m.note as i32 - n.note as i32).abs())
+                .min()
+                .unwrap_or(0);
+            let key = (if cross { 1u8 } else { 0 }, pitch_gap);
+            if key < best_key {
+                best_key = key;
+                best = Some(i);
+            }
+        }
+        if let Some(i) = best {
+            if nf != voice_fam[i] {
+                cross_added[i] += 1;
+            }
+            let pos = voices[i].partition_point(|m| m.start <= n.start);
+            voices[i].insert(pos, n);
+        }
+    }
 }
 
 // 길이(틱)를 쉼표 토큰들로 출력하고 실제 출력된 틱 합을 반환

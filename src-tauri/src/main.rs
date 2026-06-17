@@ -288,6 +288,20 @@ fn avg_pitch(voice: &[Note]) -> u8 {
     (voice.iter().map(|n| n.note as u32).sum::<u32>() / voice.len() as u32) as u8
 }
 
+// 보이스의 대표 악기(노트 수 다수결). gap-fill 로 빌려온 음이 첫머리에 와도 흔들리지 않게,
+// 첫 음이 아니라 다수결로 음색 이름을 정한다.
+fn dominant_program(voice: &[Note]) -> u8 {
+    let mut counts: HashMap<u8, usize> = HashMap::new();
+    for n in voice {
+        *counts.entry(n.program).or_default() += 1;
+    }
+    counts
+        .into_iter()
+        .max_by_key(|&(_, c)| c)
+        .map(|(p, _)| p)
+        .unwrap_or(0)
+}
+
 // 모드에 따라 보이스를 분배하고 이름을 붙인다.
 // - solo(단독): 가장 중요한 3보이스. 멜로디 + 화음1, 화음2
 // - duo(2인): 4보이스. 앞 3개(멜로디·화음) + 마지막 베이스 (1명이 앞 3개, 1명이 베이스)
@@ -309,8 +323,12 @@ fn convert_voices(
         }
         "ensemble" => {
             let voices = allocate_voices_by_instrument(notes, MAX_VOICES);
-            let distinct: std::collections::HashSet<u8> =
-                voices.iter().filter_map(|v| v.first().map(|n| n.program)).collect();
+            // 음색군(family) 기준으로 여러 음색이면 악기군 이름, 단일 음색이면 역할 이름
+            let distinct: std::collections::HashSet<u8> = voices
+                .iter()
+                .filter(|v| !v.is_empty())
+                .map(|v| dominant_program(v) / 8)
+                .collect();
             if distinct.len() > 1 {
                 name_by_instrument(voices, bpm, char_limit, tempo_changes)
             } else {
@@ -334,7 +352,7 @@ fn name_by_instrument(
 ) -> Vec<VoiceResult> {
     let mut family_idx: HashMap<&str, usize> = HashMap::new();
     build_voices_with_limit(voices, bpm, char_limit, tempo_changes, |_, final_voice| {
-        let family = gm_family_name(final_voice[0].program);
+        let family = gm_family_name(dominant_program(final_voice));
         let c = family_idx.entry(family).or_insert(0);
         *c += 1;
         format!("{}{}", family, c)
