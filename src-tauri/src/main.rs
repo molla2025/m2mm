@@ -344,12 +344,31 @@ fn convert_voices(
 }
 
 // 여러 악기: 악기군 이름 + 악기별 일련번호 (피아노1, 피아노2, 기타1 …)
+// 같은 악기명 카드가 UI에서 붙어 보이도록, 악기명 첫 등장 순서로 묶어 정렬한 뒤 번호를 매긴다.
+// (현악=GM5/6, 신스=GM10/11/12 처럼 다른 GM군이 같은 이름이 돼도 흩어지지 않게)
 fn name_by_instrument(
-    voices: Vec<Vec<Note>>,
+    mut voices: Vec<Vec<Note>>,
     bpm: u32,
     char_limit: usize,
     tempo_changes: &[TempoChange],
 ) -> Vec<VoiceResult> {
+    let mut group_order: HashMap<&str, usize> = HashMap::new();
+    for v in &voices {
+        if v.is_empty() {
+            continue;
+        }
+        let name = gm_family_name(dominant_program(v));
+        let next = group_order.len();
+        group_order.entry(name).or_insert(next);
+    }
+    // 안정 정렬: 같은 악기명끼리 모이고, 그룹 순서는 첫 등장(중요도) 순 유지
+    voices.sort_by_key(|v| {
+        group_order
+            .get(gm_family_name(dominant_program(v)))
+            .copied()
+            .unwrap_or(usize::MAX)
+    });
+
     let mut family_idx: HashMap<&str, usize> = HashMap::new();
     build_voices_with_limit(voices, bpm, char_limit, tempo_changes, |_, final_voice| {
         let family = gm_family_name(dominant_program(final_voice));
