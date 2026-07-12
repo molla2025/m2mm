@@ -10,6 +10,10 @@ pub const GRID_SIZE: u32 = 24;
 const MML_OCTAVE_MIN: i32 = 1;
 const MML_OCTAVE_MAX: i32 = 8;
 
+// MML T(템포) 명령 유효 범위. 이 상한을 넘는 빠른 곡은 템포 폴딩으로 접는다.
+const MML_TEMPO_MIN: u32 = 32;
+const MML_TEMPO_MAX: u32 = 255;
+
 // 매칭 실패 시 기본 길이 (16분음표 = 96틱)
 const FALLBACK_LENGTH: &str = "16";
 const FALLBACK_TICKS: u32 = 96;
@@ -180,39 +184,56 @@ pub fn extract_midi_notes(midi_data: &[u8]) -> Result<(Vec<Note>, u32, Vec<Tempo
         _ => return Err("SMPTE 타이밍 지원하지 않음".to_string()),
     };
 
-    // 모든 템포 변경 이벤트 추출
-    let mut tempo_changes = Vec::new();
+    // 모든 템포 변경 이벤트 추출 (원본 BPM, 아직 클램프/폴딩 전)
+    let mut raw_tempos: Vec<(u32, f64)> = Vec::new();
     for track in &smf.tracks {
         let mut tick = 0u32;
         for event in track {
             tick += event.delta.as_int();
             if let midly::TrackEventKind::Meta(midly::MetaMessage::Tempo(tempo)) = event.kind {
-                // 마비노기/원본 MML의 T 범위(32~255)로 클램프. (비정상 0값 등도 안전 처리)
-                let bpm = ((60_000_000.0 / tempo.as_int() as f64).round() as u32).clamp(32, 255);
-                tempo_changes.push((tick, bpm));
+                let us = tempo.as_int();
+                if us == 0 {
+                    continue; // 비정상 0값은 무시
+                }
+                raw_tempos.push((tick, 60_000_000.0 / us as f64));
             }
         }
     }
 
     // 템포 변경을 tick 순으로 정렬하고 중복 제거
-    tempo_changes.sort_by_key(|&(tick, _)| tick);
-    tempo_changes.dedup_by_key(|&mut (tick, _)| tick);
+    raw_tempos.sort_by_key(|&(tick, _)| tick);
+    raw_tempos.dedup_by_key(|&mut (tick, _)| tick);
+
+    // 템포 폴딩 계수 d: MML T 상한(255)을 넘는 빠른 곡은 T를 정수배로 접고
+    // 음표 길이(틱)도 같은 비율로 줄여 실제 재생 시간을 보존한다.
+    // (예: 340 BPM → T170 + 모든 틱 ½배. 4분음표가 8분음표가 되어 재생 시간 동일)
+    // d 는 곡 전체 최고 템포 기준 하나로 정해 전 구간에 같은 타임스케일을 적용한다.
+    let max_bpm = raw_tempos.iter().map(|&(_, b)| b).fold(0.0_f64, f64::max);
+    let fold = if max_bpm > MML_TEMPO_MAX as f64 {
+        (max_bpm / MML_TEMPO_MAX as f64).ceil() as u32
+    } else {
+        1
+    }
+    .max(1);
+
+    // 폴딩된 원본 BPM을 MML T 범위(32~255)로 클램프
+    let fold_bpm = |raw: f64| ((raw / fold as f64).round() as u32).clamp(MML_TEMPO_MIN, MML_TEMPO_MAX);
 
     // BPM - 첫 번째 템포 또는 기본값
-    let bpm = tempo_changes.first().map(|&(_, bpm)| bpm).unwrap_or(120);
+    let bpm = raw_tempos.first().map(|&(_, b)| fold_bpm(b)).unwrap_or(120);
 
-    // TPB 변환 비율 계산
-    let tpb_ratio = TPB as f64 / tpb as f64;
+    // TPB 변환 비율에 폴딩 계수를 합쳐 노트·템포 틱에 일괄 적용
+    let tpb_ratio = TPB as f64 / tpb as f64 / fold as f64;
 
     // 템포 변경을 변환된 tick으로 스냅
-    let tempo_changes_converted: Vec<TempoChange> = tempo_changes
+    let tempo_changes_converted: Vec<TempoChange> = raw_tempos
         .into_iter()
-        .map(|(tick, bpm)| {
+        .map(|(tick, raw_bpm)| {
             let tick_converted = (tick as f64 * tpb_ratio).round() as u32;
             let tick_snapped = snap_to_grid(tick_converted);
             TempoChange {
                 tick: tick_snapped,
-                bpm,
+                bpm: fold_bpm(raw_bpm),
             }
         })
         .collect();
@@ -878,6 +899,92 @@ mod tests {
                 }
             }
         }
+    }
+
+    // MIDI VLQ(가변 길이 수량) 인코딩
+    fn vlq(mut v: u32, out: &mut Vec<u8>) {
+        let mut stack = Vec::new();
+        stack.push((v & 0x7f) as u8);
+        v >>= 7;
+        while v > 0 {
+            stack.push(((v & 0x7f) as u8) | 0x80);
+            v >>= 7;
+        }
+        while let Some(b) = stack.pop() {
+            out.push(b);
+        }
+    }
+
+    // 템포 1개 + 노트 목록으로 최소 SMF(format 0) 바이트를 만든다. (테스트용)
+    // notes: (key, start_tick, dur_tick)
+    fn smf_bytes(tpb: u16, tempo_us: u32, notes: &[(u8, u32, u32)]) -> Vec<u8> {
+        let mut track = Vec::new();
+        // tick 0 템포 메타
+        vlq(0, &mut track);
+        track.extend_from_slice(&[0xFF, 0x51, 0x03]);
+        track.push((tempo_us >> 16) as u8);
+        track.push((tempo_us >> 8) as u8);
+        track.push(tempo_us as u8);
+        // note on/off 이벤트 (절대 tick 정렬)
+        let mut evts: Vec<(u32, u8, u8, u8)> = Vec::new();
+        for &(key, start, dur) in notes {
+            evts.push((start, 0x90, key, 100));
+            evts.push((start + dur, 0x80, key, 0));
+        }
+        evts.sort_by_key(|e| e.0);
+        let mut last = 0u32;
+        for (tick, status, key, vel) in evts {
+            vlq(tick - last, &mut track);
+            last = tick;
+            track.extend_from_slice(&[status, key, vel]);
+        }
+        // end of track
+        vlq(0, &mut track);
+        track.extend_from_slice(&[0xFF, 0x2F, 0x00]);
+
+        let mut out = Vec::new();
+        out.extend_from_slice(b"MThd");
+        out.extend_from_slice(&6u32.to_be_bytes());
+        out.extend_from_slice(&0u16.to_be_bytes()); // format 0
+        out.extend_from_slice(&1u16.to_be_bytes()); // 1 track
+        out.extend_from_slice(&tpb.to_be_bytes());
+        out.extend_from_slice(b"MTrk");
+        out.extend_from_slice(&(track.len() as u32).to_be_bytes());
+        out.extend_from_slice(&track);
+        out
+    }
+
+    // 255를 넘는 빠른 곡은 템포가 폴딩되고, 음표 길이도 같은 비율로 줄어 재생 시간이 보존돼야 한다.
+    #[test]
+    fn tempo_over_255_is_folded_preserving_walltime() {
+        // TPB 384, 340 BPM, 4분음표(384틱) 하나
+        let tempo_us = 60_000_000 / 340;
+        let midi = smf_bytes(384, tempo_us, &[(60, 0, 384)]);
+        let (notes, bpm, tempos) = extract_midi_notes(&midi).unwrap();
+
+        assert!(bpm <= MML_TEMPO_MAX, "T가 상한을 넘음: {bpm}");
+        assert_eq!(bpm, 170, "340 BPM은 T170으로 접혀야 함: {bpm}");
+        assert_eq!(tempos[0].bpm, 170);
+        // 4분음표(384틱)가 8분음표(192틱)로 접혀야 함
+        assert_eq!(notes[0].duration, 192, "음표 길이가 절반으로 접혀야 함");
+
+        // 실제 재생 시간(wall-clock)이 원곡과 일치해야 한다 (1ms 이내)
+        let walltime = notes[0].duration as f64 / TPB as f64 / bpm as f64 * 60.0;
+        let original = 384.0 / 384.0 / 340.0 * 60.0;
+        assert!(
+            (walltime - original).abs() < 0.001,
+            "재생 시간 불일치: {walltime}s vs 원곡 {original}s"
+        );
+    }
+
+    // 255 이하의 정상 템포는 폴딩 없이 그대로 유지돼야 한다.
+    #[test]
+    fn tempo_under_255_is_unchanged() {
+        let tempo_us = 60_000_000 / 120;
+        let midi = smf_bytes(384, tempo_us, &[(60, 0, 384)]);
+        let (notes, bpm, _t) = extract_midi_notes(&midi).unwrap();
+        assert_eq!(bpm, 120, "정상 템포는 그대로여야 함");
+        assert_eq!(notes[0].duration, 384, "정상 템포에선 음표 길이 불변");
     }
 
     // 멀티악기 샘플로 악기 인지 분배 결과 확인 (cargo test explore_instruments -- --ignored --nocapture)
