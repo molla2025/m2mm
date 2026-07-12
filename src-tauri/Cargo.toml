@@ -1,6 +1,6 @@
 [package]
 name = "mobinogi-mml-converter"
-version = "0.1.2"
+version = "0.1.3"
 description = "MIDI to Mobinogi MML Converter"
 authors = ["molla2025"]
 edition = "2024"
